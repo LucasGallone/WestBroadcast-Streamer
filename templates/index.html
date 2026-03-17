@@ -1,0 +1,1604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <title>WestBroadcast Streamer{% if (not login_needed or not cfg.server.hide_bg_on_login) and cfg.server.instance_name %} - {{ cfg.server.instance_name }}{% endif %}</title>
+    <script src="{{ url_for('static', filename='socket.io.js') }}"></script>
+    <style>
+        :root { --bg: #eef2f5; --panel: #dae6f0; --blue: #3c8dbc; --meter-bg: #111; --danger: #d9534f; --success: #5cb85c; --info-blue: #2196F3; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; background-color: var(--bg); color: #333; }
+    </style>
+
+    {% if not login_needed or not cfg.server.hide_bg_on_login %}
+    <style>
+        .header {
+            background: linear-gradient(to bottom, #4a9fd6 0%, #3c8dbc 100%);
+            color: white; 
+            padding: 8px 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 3px solid #fff; 
+            min-height: 50px; 
+            position: relative;
+        }
+        
+        .header-title-col { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; line-height: 1.2; }
+        .header-btns { display: flex; gap: 10px; align-items: center; }
+        
+        /* STYLE MENU */
+        .menu-btn { cursor: pointer; font-size: 1.5rem; color: white; background: none; border: none; }
+        .menu-overlay { 
+            display: none; position: absolute; top: 100%; right: 0; 
+            background: #f9f9f9; box-shadow: 0 4px 8px rgba(0,0,0,0.2); 
+            border: 1px solid #ccc; z-index: 2000; min-width: 200px;
+        }
+        .menu-overlay a, .menu-overlay button {
+            display: block; width: 100%; padding: 12px 20px; text-align: left;
+            background: none; border: none; border-bottom: 1px solid #eee;
+            color: #333; font-size: 0.95rem; cursor: pointer; text-decoration: none;
+            box-sizing: border-box; font-family: inherit;
+        }
+        .menu-overlay button:hover, .menu-overlay a:hover { background: #e0e0e0; }
+
+        .btn-sec { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; padding: 5px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85rem; text-decoration: none; display: inline-block; }
+        .btn-sec:hover { background: rgba(0,0,0,0.4); }
+        
+        .now-playing-bar {
+            background-color: var(--panel);
+            color: #222;
+            padding: 12px 20px;
+            font-size: 0.95rem;
+            border-bottom: 1px solid #bdc9d6;
+            font-weight: bold;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center; 
+            min-height: 20px;
+        }
+
+        .container { display: flex; flex-direction: column; padding: 0 20px 20px 20px; gap: 20px; max-width: 1400px; margin: 0 auto; padding-bottom: 60px; }
+        
+        .meters-row { display: flex; flex-direction: row; gap: 15px; background: var(--panel); border: 1px solid #bdc9d6; border-radius: 5px; padding: 20px; justify-content: center; }
+        
+        .meter-group { 
+            flex: 1; max-width: 250px; 
+            background: #cfdbe6; padding: 15px; border-radius: 4px; 
+            opacity: 0.8; transition: all 0.3s; 
+            display: flex; flex-direction: column; align-items: center; 
+        }
+        .meter-group.active { opacity: 1; background: #fff; box-shadow: 0 0 12px rgba(0,0,0,0.2); transform: scale(1.02); z-index: 10; border: 1px solid #aaa; }
+        .meter-group.output { opacity: 1; border: 2px solid var(--blue); background: #e8e8e8; }
+        
+        .src-title { font-weight: bold; font-size: 1rem; margin-bottom: 5px; text-align: center; }
+        
+        .status-badge { 
+            font-size: 0.75rem; color: white; padding: 4px 8px; border-radius: 4px; 
+            margin-bottom: 2px;
+            font-weight: bold; text-align: center; min-width: 100px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        /* CODEC INFO */
+        .codec-info {
+            font-size: 0.7rem; 
+            color: #555; 
+            margin-bottom: 4px; 
+            font-family: 'Segoe UI', sans-serif; 
+            height: 14px; 
+            font-weight: 600; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px; 
+            text-align: center;
+        }
+        
+        .vu-wrapper { display: flex; gap: 2px; background: #111; padding: 10px 6px; border: 1px solid #555; border-radius: 3px; box-shadow: inset 0 0 5px #000; }
+        .vu-scale { position: relative; width: 20px; height: 260px; color: #888; font-size: 0.65rem; font-weight: bold; margin-right: 2px; }
+        .vu-scale span { position: absolute; right: 0; transform: translateY(-50%); }
+        .vu-bars-area { display: flex; gap: 3px; height: 260px; position: relative; background-image: linear-gradient(to bottom, #333 1px, transparent 1px); background-size: 100% 10%; }
+        
+        .vu-bar { 
+            width: 18px; position: relative; 
+            background: linear-gradient(to top, 
+                #00b300 0%, 
+                #00b300 72.5%,   
+                #ffcc00 72.6%,   
+                #ff6600 80%,     
+                #ff0000 90%,     
+                #ff0000 100%     
+            ); 
+        }
+        .vu-mask { width: 100%; background-color: #1a1a1a; height: 100%; transition: height 0.1s linear; opacity: 0.95; border-bottom: 1px solid #000; position: relative; z-index: 1;}
+        .vu-peak { position: absolute; width: 100%; height: 2px; background-color: #ffffff; z-index: 2; transition: top 0.1s linear; display: none; box-shadow: 0 0 4px #000; }
+        
+        .digital-readout { font-family: 'Consolas', monospace; font-size: 0.8rem; margin-top: 8px; color: #333; font-weight: bold; white-space: nowrap; }
+        
+        .settings-grid { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 60px; }
+        .source-col { flex: 1; min-width: 300px; background: #fff; border: 1px solid #bdc9d6; padding: 15px; border-radius: 5px; }
+        .global-col { width: 100%; flex-basis: 100%; background: #fff; border: 1px solid #bdc9d6; padding: 15px; border-radius: 5px; margin-top: 5px; }
+        
+        fieldset { border: 1px solid #ddd; padding: 12px; margin: 0; height: 100%; box-sizing: border-box; }
+        legend { font-weight: bold; color: var(--blue); font-size: 0.95rem; padding: 0 5px; }
+        
+        .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 0.9rem; }
+        .form-row label { flex: 0 0 210px; color: #444; font-weight: 500; display:flex; align-items:center; } 
+        .form-row input[type=text], .form-row input[type=number], .form-row select, .form-row input[type=file], .form-row input[type=password] { flex: 1; padding: 6px; border: 1px solid #ccc; width: 100%; border-radius: 3px; min-width: 0; }
+        .form-row input[type=checkbox] { width: auto; flex: 0; }
+
+        /* BLUE TOOLTIP */
+        .info-icon-blue {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 18px;
+            height: 18px;
+            background-color: var(--info-blue); 
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            font-family: serif; 
+            font-style: italic;
+            font-weight: bold;
+            font-size: 13px;
+            margin-left: 8px;
+            cursor: help;
+            position: relative;
+        }
+        
+        .info-icon-blue:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 140%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            white-space: normal;
+            width: 250px;
+            font-size: 0.85rem;
+            line-height: 1.3;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 1000;
+            pointer-events: none;
+            text-align: center;
+            font-family: 'Segoe UI', sans-serif;
+            font-style: normal;
+        }
+        
+        .info-icon-blue:hover::before {
+            content: '';
+            position: absolute;
+            bottom: 110%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+            z-index: 1000;
+        }
+
+        .footer-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: #dae6f0; border-top: 1px solid #bdc9d6; padding: 15px; text-align: center; z-index: 100; }
+        button.save-btn { width: 400px; max-width: 90%; padding: 12px 25px; background: var(--blue); color: white; border: none; font-weight: bold; cursor: pointer; font-size: 1.1rem; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: background 0.2s; }
+        button.save-btn:hover { background: #337ab7; }
+    </style>
+
+    {% endif %}
+
+    <style>
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); z-index: 9999; justify-content: center; align-items: center; }
+        .modal-box { background: white; padding: 30px; border-radius: 8px; width: 400px; box-shadow: 0 0 20px rgba(0,0,0,0.5); text-align: center; max-height: 90vh; overflow-y: auto;}
+        .modal-box h2 { margin-top: 0; color: var(--blue); font-size: 1.4rem; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px;}
+        .modal-box input { display: block; width: 90%; margin: 15px auto; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .modal-btn { width: 100%; padding: 12px; margin-top: 10px; cursor: pointer; color: white; border: none; border-radius: 4px; font-weight: bold; font-size: 1rem; }
+        .btn-blue { background: var(--blue); } .btn-danger { background: var(--danger); } .btn-success { background: var(--success); } .btn-grey { background: #777; }
+        .modal-section { border-top: 1px solid #eee; margin-top: 20px; padding-top: 20px; text-align: left; }
+        .modal-section h3 { font-size: 1rem; margin-bottom: 10px; color: #555; }
+
+        /* TABLE LOGS */
+        .logs-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; text-align: left; }
+        .logs-table th, .logs-table td { padding: 8px; border-bottom: 1px solid #eee; }
+        .logs-table th { background: #f2f2f2; color: #333; }
+        .log-error { color: #d9534f; font-weight: bold; }
+        .log-warning { color: #e67e22; font-weight: bold; }
+        .log-info { color: #17a2b8; font-weight: bold; }
+        .log-recovery { color: #28a745; font-weight: bold; }
+        .log-system { color: #6f42c1; font-weight: bold; }
+        .log-auth { color: #d4ac0d; font-weight: bold; }
+        
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .filter-bar select { padding: 5px; }
+        
+        /* PAGINATION */
+        .pagination-controls { margin-left: auto; display: flex; gap: 5px; align-items: center; }
+        .page-btn { padding: 5px 10px; cursor: pointer; border: 1px solid #ccc; background: #fff; font-size: 0.85rem; }
+        .page-btn:disabled { opacity: 0.5; cursor: default; }
+
+        .blur-background {
+            filter: blur(8px);
+            pointer-events: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body>
+
+{% if login_needed %}
+<div class="modal" style="display:flex;">
+    <div class="modal-box">
+        <h2>Please log in to continue</h2>
+        {% if login_error %}
+        <div style="color: red; margin-bottom: 15px; font-weight: bold;">Access denied: Invalid credentials.</div>
+        {% endif %}
+        <form action="/login" method="POST">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit" class="modal-btn btn-blue">Login</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if not login_needed %}
+{% if session.role == 'admin' %}
+<div id="sec-modal" class="modal">
+    <div class="modal-box" style="width: 600px; max-width: 95%;">
+        <h2>Webserver Settings</h2>
+        <form action="/update_security" method="POST">
+            
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: left; border: 1px solid #ddd;">
+                <h3 style="margin-top:0; font-size:1rem; color:var(--blue); border-bottom:1px solid #ddd; padding-bottom:5px;">General Settings</h3>
+                <div class="form-row"><label style="flex:0 0 200px;">Instance Name (Optional):</label><input type="text" name="srv_name" value="{{ cfg.server.instance_name }}"></div>
+                <div class="form-row"><label style="flex:0 0 200px;">HTTP Port (Restart required!):</label><input type="number" name="srv_port" value="{{ cfg.server.port }}" required></div>
+                <div class="form-row" style="justify-content: flex-start; gap: 10px; margin-top: 10px;">
+                    <input type="checkbox" name="hide_bg" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.hide_bg_on_login %}checked{% endif %}>
+                    <label style="flex:none; width:auto;">Hide VU meters, instance name and "Now Playing" status when logged out</label>
+                </div>
+               <div class="form-row" style="justify-content: flex-start; gap: 10px; margin-top: 10px; margin-bottom: 0;">
+                    <input type="checkbox" name="peak_hold" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.peak_hold_enabled %}checked{% endif %}>
+                    <label style="flex:none; width:auto;">Enable the Peak Hold function on the VU meters</label>
+                </div>
+                <div class="form-row" style="justify-content: flex-start; gap: 0; margin-top: 0; margin-left: 23px; margin-bottom: 5px;">
+                    <label style="flex:none; width:auto; padding-right: 0;">-> Peak Hold Time (seconds):</label>
+                    <input type="number" name="peak_time" value="{{ cfg.server.peak_hold_time }}" min="1" max="60" style="width: 50px; flex:none; margin-left: 5px;">
+                </div>
+            </div>
+
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: left; border: 1px solid #ddd;">
+                <h3 style="margin-top:0; font-size:1rem; color:var(--blue); border-bottom:1px solid #ddd; padding-bottom:5px;">Administrator Account</h3>
+                <div class="form-row"><label style="flex:0 0 200px;">Username:</label><input type="text" name="srv_user" value="{{ cfg.server.user }}" required></div>
+                <div class="form-row"><label style="flex:0 0 200px;">Password:</label><input type="text" name="srv_pass" value="{{ cfg.server.password }}" required></div>
+            </div>
+
+            <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: left; border: 1px solid #ddd;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom:1px solid #ddd; padding-bottom:5px; margin-bottom: 10px;">
+                    <h3 style="margin:0; font-size:1rem; color:var(--blue);">Operator Account</h3>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <label style="font-weight:bold; font-size: 0.9rem; color:var(--danger); margin:0;">Enabled:</label>
+                        <input type="checkbox" name="op_enabled" style="margin:0; width:auto!important; flex:0;" {% if cfg.server.op_enabled %}checked{% endif %}>
+                    </div>
+                </div>
+                <div class="form-row"><label style="flex:0 0 200px;">Username:</label><input type="text" name="op_user" value="{{ cfg.server.op_user }}"></div>
+                <div class="form-row"><label style="flex:0 0 200px;">Password:</label><input type="text" name="op_pass" value="{{ cfg.server.op_pass }}"></div>
+                
+                <div style="margin-top:15px; padding-top:10px; border-top:1px dashed #ccc;">
+                    <div style="font-weight:bold; font-size:0.85rem; margin-bottom:10px; color:#555;">By default, the operator account only has rights to modify the sources, without being able to modify the alert emails rules. Access to all "sensitive" sections is also disabled.<br><br>If needed, you can enable access to some of these sections by checking the corresponding boxes below.</div>
+                    <div class="form-row" style="justify-content: flex-start; gap:10px;">
+                        <input type="checkbox" name="op_audio" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.op_audio_access %}checked{% endif %}>
+                        <label style="flex:none; width:auto;">Allow access to the "Audio Output / Loss & Recovery" functions</label>
+                    </div>
+                    <div class="form-row" style="justify-content: flex-start; gap:10px;">
+                        <input type="checkbox" name="op_backup" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.op_backup_access %}checked{% endif %}>
+                        <label style="flex:none; width:auto;">Allow access to the "Backup Audio Sources" section</label>
+                    </div>
+                    <div class="form-row" style="justify-content: flex-start; gap:10px;">
+                        <input type="checkbox" name="op_fm" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.op_fm_access %}checked{% endif %}>
+                        <label style="flex:none; width:auto;">Allow access to the "FM Settings" section</label>
+                    </div>
+                    <div class="form-row" style="justify-content: flex-start; gap:10px;">
+                        <input type="checkbox" name="op_allow_restart" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.op_allow_restart %}checked{% endif %}>
+                        <label style="flex:none; width:auto;">Allow server restart via the operator account</label>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:10px;">
+                <button type="submit" class="modal-btn btn-blue" style="flex:1; margin-top:0;">Save Changes</button>
+                <button type="button" class="modal-btn btn-grey" style="flex:1; margin-top:0;" onclick="document.getElementById('sec-modal').style.display='none'">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div id="sys-modal" class="modal">
+    <div class="modal-box" style="width: 450px;">
+        <h2>System Management</h2>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="confirmRestart()" class="modal-btn btn-blue" style="flex:1;">Restart</button>
+            {% if session.role == 'admin' %}
+            <button onclick="confirmRestore()" class="modal-btn btn-danger" style="flex:1;">Factory Reset</button>
+            {% endif %}
+        </div>
+        {% if session.role == 'admin' %}
+        <div class="modal-section">
+            <h3>Configuration Backup</h3>
+            <div style="display: flex; gap: 10px;"><a href="/sys_export" target="_blank" class="modal-btn btn-success" style="text-align:center; text-decoration:none; flex:1; line-height: 20px;">Export Configuration File</a></div>
+        </div>
+        <div class="modal-section">
+            <h3>Import Configuration</h3>
+            <form action="/sys_import" method="POST" enctype="multipart/form-data">
+                <input type="file" name="config_file" accept=".json" required>
+                <button type="submit" class="modal-btn btn-blue">Import Configuration File & Restart</button>
+            </form>
+        </div>
+        {% endif %}
+        <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('sys-modal').style.display='none'" style="margin-top: 20px;">Close</button>
+    </div>
+</div>
+
+{% if session.role == 'admin' %}
+<div id="smtp-modal" class="modal">
+    <div class="modal-box" style="width: 95%; max-width: 950px;">
+        <h2>SMTP Settings (For sending alert emails)</h2>
+        <form action="/update_smtp" method="POST">
+            <div style="display: flex; align-items: center; justify-content: flex-start; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                <label style="font-weight: bold; color: #333; cursor: pointer; margin: 0;">Enable SMTP service:</label>
+                <input type="checkbox" name="smtp_enabled" style="width: auto !important; margin: 0 !important; display: inline-block !important; cursor: pointer;" {% if cfg.smtp.enabled %}checked{% endif %}>
+            </div>
+            
+            <div style="display: flex; gap: 30px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 320px; background: #f9f9f9; padding: 15px; border-radius: 5px;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Sender Account Configuration</h3>
+                    <div class="form-row"><label style="flex:0 0 150px;">SMTP Host:</label><input type="text" name="smtp_host" value="{{ cfg.smtp.host }}"></div>
+                    <div class="form-row"><label style="flex:0 0 150px;">SMTP Port:</label><input type="number" name="smtp_port" value="{{ cfg.smtp.port }}"></div>
+                    <div class="form-row"><label style="flex:0 0 150px;">SMTP Username:</label><input type="text" name="smtp_user" value="{{ cfg.smtp.user }}"></div>
+                    <div class="form-row"><label style="flex:0 0 150px;">SMTP Password:</label><input type="password" name="smtp_pass" value="{{ cfg.smtp.pass }}"></div>
+                    <div class="form-row"><label style="flex:0 0 150px;">Sender Email:</label><input type="text" name="smtp_from" value="{{ cfg.smtp.from }}"></div>
+                    <div class="form-row" style="justify-content: flex-start;"><label style="flex:0 0 150px;">Use TLS Protocol:</label><input type="checkbox" name="smtp_tls" style="width: auto !important; margin: 0 !important; flex: 0;" {% if cfg.smtp.tls %}checked{% endif %}></div>
+                    <hr style="border: 0; border-top: 1px solid #ddd; margin: 27px 0 15px 0;">
+                    <div class="form-row"><label style="flex:0 0 270px;">Delay before sending an alert (seconds):</label><input type="number" name="smtp_trigger_delay" value="{{ cfg.smtp.trigger_delay }}"></div>
+                    <div class="form-row"><label style="flex:0 0 270px;">Interval between alert emails (minutes):</label><input type="number" name="smtp_spam_delay" value="{{ cfg.smtp.spam_delay }}"></div>
+                </div>
+                
+                <div style="flex: 1; min-width: 320px; background: #f9f9f9; padding: 15px; border-radius: 5px;">
+                    <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px;">Recipients</h3>
+                    {% for i in range(4) %}
+                    <div class="form-row">
+                        <label style="flex:0 0 150px;">Email {{ i+1 }}:</label>
+                        <input type="text" name="smtp_to_{{ i }}" value="{{ cfg.smtp.recipients[i] }}">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button type="submit" class="modal-btn btn-blue">Save Changes</button>
+                <button type="button" onclick="sendSmtpTest()" class="modal-btn btn-success">Send Test Email</button>
+                <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('smtp-modal').style.display='none'">Close</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if session.role == 'admin' %}
+<div id="logs-modal" class="modal">
+    <div class="modal-box" style="width: 700px; max-width: 90%;">
+        <h2>System and Authentication Logs</h2>
+        <div class="filter-bar">
+            <select id="log-filter" onchange="currentLogPage=1; loadLogs()">
+                <option value="ALL">All Events</option>
+                <option value="INFO">Info</option>
+                <option value="WARNING">Warnings</option>
+                <option value="RECOVERY">Recovery</option>
+                <option value="ERROR">Errors</option>
+                <option value="SYSTEM">System</option>
+                <option value="AUTH">Auth</option>
+            </select>
+            <button onclick="loadLogs()" class="btn-sec" style="color: black; border-color: #ccc;">Refresh</button>
+            <a href="/logs_export" target="_blank" class="btn-sec" style="color: black; border-color: #ccc;">Export all events to text file</a>
+            <button onclick="clearLogs()" class="btn-sec" style="color: white; background: var(--danger); border-color: var(--danger);">Clear</button>
+            
+            <div class="pagination-controls">
+                <button class="page-btn" onclick="changeLogPage(-1)" id="prev-page-btn">&lt;</button>
+                <span id="log-page-info">Page 1</span>
+                <button class="page-btn" onclick="changeLogPage(1)" id="next-page-btn">&gt;</button>
+            </div>
+        </div>
+        <div style="height: 400px; overflow-y: auto; border: 1px solid #ccc;">
+            <table class="logs-table">
+                <thead><tr><th>Timestamp</th><th>Type</th><th>Event</th></tr></thead>
+                <tbody id="logs-body"></tbody>
+            </table>
+        </div>
+        <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('logs-modal').style.display='none'">Close</button>
+    </div>
+</div>
+{% endif %}
+
+<div id="upload-modal" class="modal">
+    <div class="modal-box" style="width: 700px; max-width: 90%;">
+        <h2>Backup Audio Files</h2>
+        <form id="upload-form" style="margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px dashed #ccc;">
+            <div style="display:flex; align-items:center; gap: 10px;">
+                <input type="file" name="file" id="upload-file-input" accept="audio/*" required style="margin: 0;">
+                <button type="button" onclick="uploadAudioFile()" class="modal-btn btn-blue" style="margin: 0; width: 150px; padding: 8px;">Upload File</button>
+            </div>
+            <div id="upload-progress-container" style="display:none; margin-top: 15px; width: 100%; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                <div id="upload-progress-bar" style="height: 10px; width: 0%; background: var(--success); transition: width 0.2s;"></div>
+            </div>
+            <div id="upload-status-text" style="margin-top: 10px; font-size: 0.85rem; font-weight: bold; color: var(--success); display: none;"></div>
+        </form>
+        <div style="height: 300px; overflow-y: auto; border: 1px solid #ccc; text-align: left;">
+            <table class="logs-table">
+                <thead><tr><th>Filename</th><th>Action</th></tr></thead>
+                <tbody id="audio-files-body">
+                    {% for af in audio_files %}
+                    <tr>
+                        <td>{{ af.name }}</td>
+                        <td>
+                            <button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('{{ af.name }}')">Delete</button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="2" style="text-align: center; padding: 15px;">No files to display. The "backup-audio-files" directory is currently empty.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('upload-modal').style.display='none'">Close</button>
+    </div>
+</div>
+{% endif %}
+
+{% if not login_needed or not cfg.server.hide_bg_on_login %}
+<div id="main-content">
+    <div class="header">
+        <div class="header-title-col">
+        <div style="font-weight:bold; font-size:1.4rem;">WestBroadcast Streamer - Audio over IP Decoder with Backup Sources</div>
+        {% if cfg.server.instance_name %}
+            <div style="font-size:0.9rem; opacity:0.9; margin-top:2px;">{{ cfg.server.instance_name }}</div>
+        {% endif %}
+    </div>
+    <div class="header-btns">
+        <span id="uptime-txt" style="margin-right:15px; font-weight:bold; align-self:center;">Uptime: ...</span>
+        
+        {% if not login_needed %}
+        <div style="position:relative;">
+            <button class="menu-btn" onclick="document.getElementById('menu-dropdown').style.display = document.getElementById('menu-dropdown').style.display === 'block' ? 'none' : 'block'">&#9776;</button>
+            <div id="menu-dropdown" class="menu-overlay">
+                {% if session.role == 'admin' %}
+                    <button onclick="document.getElementById('sec-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Webserver Settings</button>
+                    <button onclick="document.getElementById('smtp-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">SMTP Settings</button>
+                {% endif %}
+                {% if session.role == 'admin' or cfg.server.op_fm_access %}
+                    <button onclick="document.getElementById('fm-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">FM Settings</button>
+                {% endif %}
+                {% if session.role == 'admin' or cfg.server.op_backup_access %}
+                <button onclick="document.getElementById('upload-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Backup Audio Files</button>
+                {% endif %}
+                <button onclick="document.getElementById('analysis-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Audio Analysis</button>
+                {% if session.role == 'admin' %}
+                    <button onclick="openLogs(); document.getElementById('menu-dropdown').style.display='none'">Logs</button>
+                {% endif %}
+                {% if session.role == 'admin' or cfg.server.op_allow_restart %}
+                <button onclick="document.getElementById('sys-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Restart / Restore</button>
+                {% endif %}
+                <a href="/logout">Logout</a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- NOW PLAYING BAR -->
+<div class="now-playing-bar" id="now-playing-text">Now playing: ...</div>
+
+<div class="container">
+    <div class="meters-row">
+        {% for i in range(3) %}
+        <div class="meter-group" id="grp-{{i}}">
+            <div class="src-title">{{ cfg.sources[i].name }}</div>
+            <div class="status-badge" id="badge-{{i}}" style="background:gray;">&nbsp;</div>
+            <div class="codec-info" id="codec-{{i}}"></div>
+            <div class="vu-wrapper">
+                <div class="vu-scale">
+                    <span style="top:0%;">0</span><span style="top:10%;">-3</span><span style="top:20%;">-6</span><span style="top:30%;">-10</span>
+                    <span style="top:40%;">-15</span><span style="top:50%;">-20</span><span style="top:60%;">-25</span><span style="top:70%;">-30</span>
+                    <span style="top:80%;">-40</span><span style="top:90%;">-50</span><span style="top:100%;">-60</span>
+                </div>
+                <div class="vu-bars-area">
+                    <div class="vu-bar"><div class="vu-mask" id="mask-src-{{i}}-l"></div><div class="vu-peak" id="peak-src-{{i}}-l"></div></div>
+                    <div class="vu-bar"><div class="vu-mask" id="mask-src-{{i}}-r"></div><div class="vu-peak" id="peak-src-{{i}}-r"></div></div>
+                </div>
+            </div>
+            <div class="digital-readout" id="dig-src-{{i}}-l">L: -- dB</div>
+            <div class="digital-readout" id="dig-src-{{i}}-r">R: -- dB</div>
+            
+            {% if not login_needed %}
+            <div style="margin-top: 10px; height: 25px; display: flex; align-items: center; justify-content: center;">
+                {% if cfg.settings.get('selection_mode', 'auto') == i|string %}
+                    <span style="font-size: 0.75rem; color: var(--danger); font-weight: bold; padding: 3px 8px; border: 1px solid var(--danger); border-radius: 3px; background: #ffebeb; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">FORCED</span>
+                {% else %}
+                    <form action="/set_mode" method="POST" style="margin:0;">
+                        <input type="hidden" name="mode" value="{{ i }}">
+                        <button type="submit" class="btn-sec" style="font-size: 0.7rem; padding: 4px 10px;">Force Source</button>
+                    </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="meter-group output">
+            <div class="src-title">Output</div>
+            <div class="status-badge" style="background:transparent; color:#333; box-shadow:none;">&nbsp;</div>
+            <div class="codec-info">&nbsp;</div>
+            <div class="vu-wrapper">
+                <div class="vu-scale">
+                    <span style="top:0%;">0</span><span style="top:10%;">-3</span><span style="top:20%;">-6</span><span style="top:30%;">-10</span>
+                    <span style="top:40%;">-15</span><span style="top:50%;">-20</span><span style="top:60%;">-25</span><span style="top:70%;">-30</span>
+                    <span style="top:80%;">-40</span><span style="top:90%;">-50</span><span style="top:100%;">-60</span>
+                </div>
+                <div class="vu-bars-area">
+                    <div class="vu-bar"><div class="vu-mask" id="mask-out-l"></div><div class="vu-peak" id="peak-out-l"></div></div>
+                    <div class="vu-bar"><div class="vu-mask" id="mask-out-r"></div><div class="vu-peak" id="peak-out-r"></div></div>
+                </div>
+            </div>
+            <div class="digital-readout" id="dig-out-l">L: -- dB</div>
+            <div class="digital-readout" id="dig-out-r">R: -- dB</div>
+
+            {% if not login_needed %}
+            <div style="margin-top: 10px; height: 25px; display: flex; align-items: center; justify-content: center;">
+                {% if cfg.settings.get('selection_mode', 'auto') == 'auto' %}
+                    <span style="font-size: 0.75rem; color: var(--success); font-weight: bold; padding: 3px 8px; border: 1px solid var(--success); border-radius: 3px; background: #e8f5e9; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">AUTOMATIC MODE ENABLED</span>
+                {% else %}
+                    <form action="/set_mode" method="POST" style="margin:0;">
+                        <input type="hidden" name="mode" value="auto">
+                        <button type="submit" class="btn-sec" style="font-size: 0.7rem; padding: 4px 10px; background: var(--success); border-color: var(--success);">Enable Automatic Mode</button>
+                    </form>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if cfg.settings.get('selection_mode', 'auto') != 'auto' %}
+    <div style="background-color: var(--danger); color: white; padding: 12px; margin-bottom: 20px; border-radius: 4px; text-align: center; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); letter-spacing: 0.5px;">
+        Automatic mode disabled! {{ cfg.sources[cfg.settings.selection_mode|int].name }} selected manually.
+    </div>
+    {% endif %}
+
+    {% if not login_needed %}
+    <form method="POST" id="mainForm">
+        <div class="settings-grid">
+            {% for i in range(3) %}
+            <div class="source-col">
+                <fieldset>
+                    <legend>{{ cfg.sources[i].name }}</legend>
+                    <div class="form-row">
+                        <label>Type:</label>
+                        <select name="type{{i}}" onchange="toggleType('{{i}}')" id="sel-type-{{i}}">
+                            <option value="stream" {% if cfg.sources[i].type == 'stream' %}selected{% endif %}>IP Stream (HTTP / HTTPS)</option>
+                            <option value="rtp" {% if cfg.sources[i].type == 'rtp' %}selected{% endif %}>RTP Stream</option>
+                            <option value="device" {% if cfg.sources[i].type == 'device' %}selected{% endif %}>Audio Input Device</option>
+                            <option value="file" {% if cfg.sources[i].type == 'file' %}selected{% endif %}>Local File</option>
+                            <option value="backup_dir" {% if cfg.sources[i].type == 'backup_dir' %}selected{% endif %}>Backup Audio Directory</option>
+                            <option value="tone" {% if cfg.sources[i].type == 'tone' %}selected{% endif %}>Test Tone Generator</option>
+                        </select>
+                    </div>
+                    <div class="form-row" id="row-url-{{i}}"><label>URL:</label><input type="text" name="url{{i}}" value="{{ cfg.sources[i].url }}"></div>
+                    <div class="form-row" id="row-rtp-{{i}}" style="display:none;"><label>URI:</label><input type="text" name="rtp_uri{{i}}" value="{{ cfg.sources[i].rtp_uri }}"></div>
+                    <div class="form-row" id="row-device-{{i}}" style="display:none;">
+                        <label>Device:</label>
+                        <select name="input_device{{i}}">
+                            <option value="None">-- Select Input --</option>
+                            {% for dev in in_devices %}
+                            <option value="{{ dev.id }}" {% if cfg.sources[i].input_device == dev.id %}selected{% endif %}>{{ dev.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row" id="row-path-{{i}}" style="display:none;"><label>Local File Path:</label><input type="text" name="path{{i}}" value="{{ cfg.sources[i].path or '' }}"></div>
+                    <div class="form-row" id="row-backup-dir-{{i}}" style="display:none;">
+                        <label>File:</label>
+                        <select name="backup_file{{i}}">
+                            <option value="">-- Select an uploaded file --</option>
+                            {% for af in audio_files %}
+                            <option value="{{ af.name }}" {% if cfg.sources[i].backup_file == af.name %}selected{% endif %}>{{ af.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-row"><label>Input Gain (dB):</label><input type="number" step="0.1" name="gain{{i}}" value="{{ cfg.sources[i].gain }}"></div>
+                    <div class="form-row" id="row-buffer-{{i}}"><label>Buffer Size (KB):</label><input type="number" step="1" min="64" name="buffer_kb{{i}}" value="{{ cfg.sources[i].buffer_kb }}"></div>
+                    <input type="hidden" name="repeat{{i}}" value="on">
+                    
+                    <div id="row-tone-settings-{{i}}" style="display:none; background:#f0f0f0; padding:5px; border-radius:3px; margin-bottom:10px;">
+                        <div class="form-row">
+                            <label>Waveform:</label>
+                            <select name="tone_wave{{i}}">
+                                <option value="sine" {% if cfg.sources[i].tone_wave == 'sine' %}selected{% endif %}>Sine</option>
+                                <option value="square" {% if cfg.sources[i].tone_wave == 'square' %}selected{% endif %}>Square</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <label>Frequency (Hz):</label>
+                            <input type="number" name="tone_freq{{i}}" value="{{ cfg.sources[i].tone_freq }}">
+                        </div>
+                    </div>
+
+                    <div id="meta-wrapper-{{i}}" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+                        <div class="form-row">
+                            <label style="flex: 0 0 280px;">Export "Currently Playing" info to text file:</label>
+                            <input type="checkbox" name="meta_enabled{{i}}" onclick="toggleMeta('{{i}}', this)" {{ 'checked' if cfg.sources[i].meta_enabled else '' }}>
+                        </div>
+                        <div id="meta-options-{{i}}" {% if not cfg.sources[i].meta_enabled %}style="display:none;"{% endif %}>
+                            <div class="form-row">
+                               <label>Export path:</label>
+                                <input type="text" name="meta_path{{i}}" value="{{ cfg.sources[i].meta_path }}">
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 280px;">Export only when played:</label>
+                                <input type="checkbox" name="meta_only_played{{i}}" {{ 'checked' if cfg.sources[i].meta_only_played else '' }}>
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 280px;">Normalize letters with accents:</label>
+                                <input type="checkbox" name="meta_normalize{{i}}" {{ 'checked' if cfg.sources[i].meta_normalize else '' }}>
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 280px;">Convert all letters to uppercase:</label>
+                                <input type="checkbox" name="meta_uppercase{{i}}" {{ 'checked' if cfg.sources[i].meta_uppercase else '' }}>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if session.role == 'admin' %}
+                    <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
+                        <div style="font-weight:bold; font-size:0.9rem; margin-bottom:5px;">Send email alerts when...</div>
+                        <div class="form-row">
+                            <label style="flex:0 0 200px;">This source is silent:</label>
+                            <input type="checkbox" name="alert_silent{{i}}" {{ 'checked' if cfg.sources[i].alert_silent else '' }}>
+                        </div>
+                        <div class="form-row">
+                            <label style="flex:0 0 200px;">This source is unreachable:</label>
+                            <input type="checkbox" name="alert_unreachable{{i}}" {{ 'checked' if cfg.sources[i].alert_unreachable else '' }}>
+                        </div>
+                    </div>
+                    {% endif %}
+                </fieldset>
+            </div>
+            {% endfor %}
+            
+            {% if session.role == 'admin' or cfg.server.op_audio_access %}
+            <div class="global-col">
+                <fieldset style="height: auto;">
+                    <legend>Audio Output / Loss & Recovery</legend>
+                    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                        <div style="flex:1; min-width:300px;">
+                            <div class="form-row"><label>Output Device:</label>
+                                <select name="audio_device">
+                                    {% for dev in devices %}
+                                    <option value="{{ dev.id }}" {% if cfg.audio.output_device == dev.id %}selected{% endif %}>{{ dev.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-row"><label>Output Gain (dB):</label><input type="number" step="0.1" name="out_gain" value="{{ cfg.audio.output_gain_db }}"></div>
+                            <div class="form-row">
+                                <label>Output Buffer (ms):<span class="info-icon-blue" data-tooltip="Increase this value if you hear crackling or micro-cuts in the output.">i</span></label>
+                                <input type="number" step="1" name="out_latency" value="{{ cfg.audio.output_latency_ms }}">
+                            </div>
+                        </div>
+                        <div style="flex:1; min-width:300px; padding-left:20px; border-left:1px solid #eee;">
+                            <div class="form-row">
+                                <label>Loss Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is below this value, the source is considered silent.">i</span></label>
+                                <input type="number" step="0.1" name="loss_thresh" value="{{ cfg.settings.loss_threshold_db }}">
+                            </div>
+                            <div class="form-row">
+                                <label>Loss Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch to a backup source when silence is detected.">i</span></label>
+                                <input type="number" step="1" name="loss_time" value="{{ cfg.settings.loss_timeout_sec | int }}">
+                            </div>
+                        </div>
+                        <div style="flex:1; min-width:300px; padding-left:20px; border-left:1px solid #eee;">
+                            <div class="form-row">
+                                <label>Recovery Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is above this value, the source is considered to be functional again.">i</span></label>
+                                <input type="number" step="0.1" name="rec_thresh" value="{{ cfg.settings.recovery_threshold_db }}">
+                            </div>
+                            <div class="form-row">
+                                <label>Recovery Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch back to the source that was considered silent.">i</span></label>
+                                <input type="number" step="1" name="rec_time" value="{{ cfg.settings.recovery_timeout_sec | int }}">
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+            </div>
+            {% endif %}
+        </div>
+        <div class="footer-bar"><button type="submit" class="save-btn">Save changes and apply configuration</button></div>
+    </form>
+    {% else %}
+    <div style="text-align:center; padding:50px; background:white;">You must log in to modify the configuration.</div>
+    {% endif %}
+</div>
+</div> <!-- main-content closure -->
+{% endif %}
+
+{% if not login_needed %}
+<!-- FM SETTINGS MODAL -->
+<div id="fm-modal" class="modal">
+    <div class="modal-box" style="width: 500px;">
+        <h2>FM Settings</h2>
+        <form action="/update_fm" method="POST">
+            <div class="modal-section" style="border-top:none; margin-top:0; padding-top:0;">
+                <h3>Output Processing</h3>
+                <div class="form-row">
+                    <label style="flex:0 0 250px;">FM Tilt Correction (EXPERIMENTAL!):</label>
+                    <input type="checkbox" name="fm_tilt" {% if cfg.fm.tilt %}checked{% endif %}>
+                </div>
+            </div>
+
+            <div class="modal-section">
+                <h3>Test Tone Generator</h3>
+                <div style="background:#f9f9f9; padding:10px; border-radius:4px; margin-bottom:10px;">
+                    <div class="form-row">
+                        <label style="flex:0 0 250px; font-weight:bold; color:var(--danger);">Enable Test Tone:</label>
+                        <input type="checkbox" name="tone_enabled" {% if cfg.fm.tone_enabled %}checked{% endif %}>
+                    </div>
+                    <div style="font-size:0.8rem; color:#666; margin-bottom:10px; font-style:italic;">
+                        Note: This will replace all audio output.
+                    </div>
+                    <div class="form-row">
+                        <label style="flex:0 0 150px;">Waveform:</label>
+                        <select name="tone_wave">
+                            <option value="sine" {% if cfg.fm.tone_wave == 'sine' %}selected{% endif %}>Sine</option>
+                            <option value="square" {% if cfg.fm.tone_wave == 'square' %}selected{% endif %}>Square</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label style="flex:0 0 150px;">Frequency (Hz):</label>
+                        <input type="number" name="tone_freq" value="{{ cfg.fm.tone_freq }}">
+                    </div>
+                    <div class="form-row">
+                        <label style="flex:0 0 150px;">Gain (dB):</label>
+                        <input type="number" name="tone_gain" value="{{ cfg.fm.tone_gain }}" step="0.1">
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="modal-btn btn-blue">Save Changes</button>
+            <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('fm-modal').style.display='none'">Close</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+{% if not login_needed or not cfg.server.hide_bg_on_login %}
+<script>
+    var socket = io();
+
+    // Global variable for current log page
+    var currentLogPage = 1;
+
+    function confirmRestart() { if(confirm("Are you sure you want to restart the decoder?\n\nThis will interrupt all audio inputs and the output for a very short time.")) window.location.href = "/sys_restart"; }
+    function confirmRestore() { if(confirm("Are you sure you want to RESTORE the decoder to factory settings?\n\nThis operation will DELETE your current configuration and cannot be undone!")) window.location.href = "/sys_restore"; }
+
+    function sendSmtpTest() {
+        if(!confirm("Are you sure you want to send a test email to the configured recipients?")) return;
+        
+        fetch('/smtp_test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(error => {
+            alert("An error occurred while communicating with the server.");
+        });
+    }
+
+    function toggleType(idx) {
+        let val = document.getElementById('sel-type-' + idx).value;
+        document.getElementById('row-url-' + idx).style.display = 'none';
+        document.getElementById('row-rtp-' + idx).style.display = 'none';
+        document.getElementById('row-device-' + idx).style.display = 'none';
+        document.getElementById('row-path-' + idx).style.display = 'none';
+        document.getElementById('row-backup-dir-' + idx).style.display = 'none';
+        document.getElementById('row-buffer-' + idx).style.display = 'flex';
+        document.getElementById('meta-wrapper-' + idx).style.display = 'none';
+        document.getElementById('row-tone-settings-' + idx).style.display = 'none';
+
+        if(val === 'stream') {
+            document.getElementById('row-url-' + idx).style.display = 'flex';
+            document.getElementById('meta-wrapper-' + idx).style.display = 'block';
+        } else if (val === 'rtp') {
+            document.getElementById('row-rtp-' + idx).style.display = 'flex';
+        } else if (val === 'device') {
+            document.getElementById('row-device-' + idx).style.display = 'flex';
+            document.getElementById('row-buffer-' + idx).style.display = 'none';
+        } else if (val === 'tone') {
+            document.getElementById('row-tone-settings-' + idx).style.display = 'block';
+            document.getElementById('row-buffer-' + idx).style.display = 'none';
+        } else if (val === 'backup_dir') {
+            document.getElementById('row-backup-dir-' + idx).style.display = 'flex';
+            document.getElementById('row-buffer-' + idx).style.display = 'none';
+        } else { // file
+            document.getElementById('row-path-' + idx).style.display = 'flex';
+            document.getElementById('row-buffer-' + idx).style.display = 'none';
+        }
+    }
+
+    function toggleMeta(idx, chk) {
+        document.getElementById('meta-options-' + idx).style.display = chk.checked ? 'block' : 'none';
+    }
+
+   function openLogs() {
+        document.getElementById('logs-modal').style.display='flex';
+        currentLogPage = 1;
+        loadLogs();
+    }
+
+    function clearLogs() {
+        if(!confirm("Are you sure you want to clear all logs?")) return;
+        fetch('/api/logs/clear', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            currentLogPage = 1;
+            loadLogs();
+        });
+    }
+
+    function refreshAudioTable() {
+        fetch('/api/audio_files')
+        .then(response => response.json())
+        .then(data => {
+            let tbody = document.getElementById('audio-files-body');
+            tbody.innerHTML = "";
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 15px;">No audio file found in the "backup-audio-files" directory.</td></tr>';
+                return;
+            }
+            data.forEach(af => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `<td>${af.name}</td>
+                                <td><button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('${af.name}')">Delete</button></td>`;
+                tbody.appendChild(tr);
+            });
+            
+            for(let i=0; i<3; i++) {
+                let select = document.querySelector(`select[name="backup_file${i}"]`);
+                if(select) {
+                    let currentVal = select.value;
+                    select.innerHTML = '<option value="">-- Select an uploaded file --</option>';
+                    data.forEach(af => {
+                        let opt = document.createElement('option');
+                        opt.value = af.name;
+                        opt.innerText = af.name;
+                        if(af.name === currentVal) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                }
+            }
+        });
+    }
+
+    function uploadAudioFile() {
+        let fileInput = document.getElementById('upload-file-input');
+        if(fileInput.files.length === 0) {
+            alert("No audio file selected for upload.");
+            return;
+        }
+
+        let formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        let xhr = new XMLHttpRequest();
+        let progressContainer = document.getElementById('upload-progress-container');
+        let progressBar = document.getElementById('upload-progress-bar');
+        let statusText = document.getElementById('upload-status-text');
+
+        progressContainer.style.display = 'block';
+        statusText.style.display = 'none';
+        progressBar.style.width = '0%';
+
+        xhr.upload.addEventListener("progress", function(e) {
+            if (e.lengthComputable) {
+                progressBar.style.width = (e.loaded / e.total) * 100 + '%';
+            }
+        }, false);
+
+        xhr.addEventListener("load", function() {
+            if(xhr.status === 200) {
+                let res = JSON.parse(xhr.responseText);
+                if(res.status === 'ok') {
+                    statusText.innerText = "Success! " + res.message;
+                    statusText.style.color = "var(--success)";
+                    statusText.style.display = "block";
+                    fileInput.value = "";
+                    refreshAudioTable();
+                } else {
+                    statusText.innerText = "Error: " + res.message;
+                    statusText.style.color = "var(--danger)";
+                    statusText.style.display = "block";
+                }
+            }
+            setTimeout(() => { progressContainer.style.display = 'none'; }, 2500);
+        }, false);
+
+        xhr.open("POST", "/upload_audio", true);
+        xhr.send(formData);
+    }
+
+    function deleteAudioFile(filename) {
+        if(!confirm("Are you sure you want to delete " + filename + "?")) return;
+        let formData = new FormData();
+        formData.append("filename", filename);
+        
+        fetch('/delete_audio', { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+            if(data.status === 'ok') refreshAudioTable();
+        });
+    }
+
+    function changeLogPage(delta) {
+        currentLogPage += delta;
+        if(currentLogPage < 1) currentLogPage = 1;
+        loadLogs();
+    }
+
+    function loadLogs() {
+        let filter = document.getElementById('log-filter').value;
+        let url = `/api/logs?page=${currentLogPage}&filter=${filter}`;
+
+        fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            let tbody = document.getElementById('logs-body');
+            tbody.innerHTML = "";
+            
+            // data.logs contains the slice for the current page
+            data.logs.forEach(log => {
+                let tr = document.createElement('tr');
+                let colorClass = "";
+                if(log.level === "ERROR") colorClass = "log-error";
+                else if(log.level === "WARNING") colorClass = "log-warning";
+                else if(log.level === "INFO") colorClass = "log-info";
+                else if(log.level === "SYSTEM") colorClass = "log-system";
+                else if(log.level === "AUTH") colorClass = "log-auth";
+                else if(log.level === "RECOVERY") colorClass = "log-recovery";
+                
+                tr.innerHTML = `<td>${log.timestamp}</td><td class="${colorClass}">${log.level}</td><td>${log.event}</td>`;
+                tbody.appendChild(tr);
+            });
+
+            // Update pagination controls
+            document.getElementById('log-page-info').innerText = `Page ${data.page} / ${data.total_pages}`;
+            document.getElementById('prev-page-btn').disabled = (data.page <= 1);
+            document.getElementById('next-page-btn').disabled = (data.page >= data.total_pages);
+            currentLogPage = data.page; // Sync in case API corrected it
+        });
+    }
+
+    window.onload = function() {
+        for(let i=0; i<3; i++) { if(document.getElementById('sel-type-' + i)) toggleType(i); }
+        // Close menu on click outside
+        window.onclick = function(event) {
+            if (!event.target.matches('.menu-btn')) {
+                let dropdowns = document.getElementsByClassName("menu-overlay");
+                for (let i = 0; i < dropdowns.length; i++) {
+                    let openDropdown = dropdowns[i];
+                    if (openDropdown.style.display === 'block') {
+                        openDropdown.style.display = 'none';
+                    }
+                }
+            }
+        }
+    };
+
+    const scalePoints = [0, -3, -6, -10, -15, -20, -25, -30, -40, -50, -60];
+    const percentPoints = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0];
+
+    const peakHoldEnabled = ("{{ cfg.server.peak_hold_enabled }}" === "True");
+    const peakHoldTime = (parseInt("{{ cfg.server.peak_hold_time }}") || 3) * 1000;
+    let peakData = {};
+
+    function dbToPercent(db) {
+
+        if (db >= scalePoints[0]) return 100;
+        if (db <= scalePoints[scalePoints.length - 1]) return 0;
+        for (let i = 0; i < scalePoints.length - 1; i++) {
+            if (db <= scalePoints[i] && db > scalePoints[i+1]) {
+                let rangeDB = scalePoints[i] - scalePoints[i+1];
+                let rangePct = percentPoints[i] - percentPoints[i+1];
+                let diff = db - scalePoints[i+1]; 
+                return percentPoints[i+1] + (diff / rangeDB * rangePct);
+            }
+        }
+        return 0;
+    }
+
+    function updateMeter(prefix, dbL, dbR, isActive) {
+        let pctL = isActive ? dbToPercent(dbL) : 0;
+        let pctR = isActive ? dbToPercent(dbR) : 0;
+        document.getElementById('mask-' + prefix + '-l').style.height = (100 - pctL) + '%';
+        document.getElementById('mask-' + prefix + '-r').style.height = (100 - pctR) + '%';
+        
+        let txtL = isActive ? "L: " + dbL.toFixed(1) + " dB" : "L: -- dB";
+        let txtR = isActive ? "R: " + dbR.toFixed(1) + " dB" : "R: -- dB";
+
+        if (peakHoldEnabled && isActive) {
+            let now = Date.now();
+            if (!peakData[prefix]) peakData[prefix] = { l: -60, r: -60, timeL: 0, timeR: 0 };
+            
+            if (dbL >= peakData[prefix].l) { peakData[prefix].l = dbL; peakData[prefix].timeL = now; }
+            if (dbR >= peakData[prefix].r) { peakData[prefix].r = dbR; peakData[prefix].timeR = now; }
+            
+            if (now - peakData[prefix].timeL > peakHoldTime) { peakData[prefix].l = dbL; peakData[prefix].timeL = now; }
+            if (now - peakData[prefix].timeR > peakHoldTime) { peakData[prefix].r = dbR; peakData[prefix].timeR = now; }
+
+            let pkPctL = dbToPercent(peakData[prefix].l);
+            let pkPctR = dbToPercent(peakData[prefix].r);
+            
+            let pkEL = document.getElementById('peak-' + prefix + '-l');
+            let pkER = document.getElementById('peak-' + prefix + '-r');
+            pkEL.style.display = 'block';
+            pkER.style.display = 'block';
+            pkEL.style.top = (100 - pkPctL) + '%';
+            pkER.style.top = (100 - pkPctR) + '%';
+        } else if (peakHoldEnabled && !isActive) {
+            document.getElementById('peak-' + prefix + '-l').style.display = 'none';
+            document.getElementById('peak-' + prefix + '-r').style.display = 'none';
+        }
+
+        document.getElementById('dig-' + prefix + '-l').innerText = txtL;
+        document.getElementById('dig-' + prefix + '-r').innerText = txtR;
+    }
+
+    socket.on('status_update', function(data) {
+        document.getElementById('uptime-txt').innerText = "Uptime: " + data.uptime;
+        for(let i=0; i<3; i++) {
+            let active = (data.active_idx === i);
+            document.getElementById('grp-'+i).classList.toggle('active', active);
+            
+            let status = data.src_statuses[i];
+            let badge = document.getElementById('badge-'+i);
+            badge.innerText = status[0];
+            badge.style.background = status[1];
+
+            let codecSpan = document.getElementById('codec-'+i);
+            if(data.codecs[i]) codecSpan.innerText = data.codecs[i];
+            else codecSpan.innerText = "";
+
+            updateMeter('src-'+i, data.vu.sources[i].l, data.vu.sources[i].r, true);
+        }
+        updateMeter('out', data.vu.out_l, data.vu.out_r, true);
+
+        let np = document.getElementById('now-playing-text');
+        np.innerText = data.now_playing ? data.now_playing : "Now playing: ...";
+    });
+</script>
+<div id="analysis-modal" class="modal">
+    <div class="modal-box" style="width: 90%; max-width: 1200px;">
+        <h2>Output Audio Analysis (CPU load increased on the host machine when active)</h2>
+        <div style="background: #111; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
+            <canvas id="analysis-canvas" style="width: 100%; height: 400px; display: block;"></canvas>
+        </div>
+        <div style="display: flex; gap: 15px; align-items: center; justify-content: center; flex-wrap: wrap;">
+            <button id="btn-analysis-toggle" onclick="toggleAnalysisEngine()" class="modal-btn btn-success" style="width: auto; padding: 8px 30px; margin: 0;">START ANALYSIS</button>
+            <div style="display: flex; align-items: center; gap: 8px; color: #333;">
+                <label>Mode:</label>
+                <select id="analysis-mode" onchange="changeAnalysisMode()" style="padding: 5px;">
+                    <option value="waveform">Waveform</option>
+                    <option value="fft">FFT Spectrum</option>
+                    <option value="rta">RTA (Octave Bands)</option>
+                    <option value="analog_vu">Analog VU Meter</option>
+                </select>
+            </div>
+            <div id="analysis-timescale-wrap" style="display: flex; align-items: center; gap: 8px; color: #333;">
+                <label>Timescale:</label>
+                <select id="analysis-timescale" style="padding: 5px;">
+                    <option value="8640">180ms</option>
+                    <option value="14400">300ms</option>
+                    <option value="24000">500ms</option>
+                    <option value="38400">800ms</option>
+                    <option value="72000">1.5s</option>
+                    <option value="120000">2.5s</option>
+                    <option value="168000">3.5s</option>
+                    <option value="288000">6s</option>
+                    <option value="480000">10s</option>
+                </select>
+            </div>
+        </div>
+        <button type="button" class="modal-btn btn-grey" onclick="closeAnalysisModal()" style="margin-top: 20px;">Close</button>
+    </div>
+</div>
+
+<script>
+    let analysisActive = false;
+    let analysisSamples = new Float32Array(480000); // 10s buffer
+    let analysisPointer = 0;
+    let analysisMode = 'waveform';
+    const canvas = document.getElementById('analysis-canvas');
+    const ctx = canvas.getContext('2d');
+    let animationId = null;
+    
+    // VU Meter Ballistics
+    let vuNeedleL = -60, vuNeedleR = -60;
+
+    function toggleAnalysisEngine() {
+        analysisActive = !analysisActive;
+        const btn = document.getElementById('btn-analysis-toggle');
+        if(analysisActive) {
+            btn.innerText = "STOP ANALYSIS";
+            btn.className = "modal-btn btn-danger";
+            socket.emit('set_analysis_state', {active: true});
+            startDrawing();
+        } else {
+            stopAnalysis();
+        }
+    }
+
+    function stopAnalysis() {
+        analysisActive = false;
+        const btn = document.getElementById('btn-analysis-toggle');
+        btn.innerText = "START ANALYSIS";
+        btn.className = "modal-btn btn-success";
+        socket.emit('set_analysis_state', {active: false});
+        if(animationId) cancelAnimationFrame(animationId);
+    }
+
+    function closeAnalysisModal() {
+        document.getElementById('analysis-modal').style.display = 'none';
+        if(analysisActive) stopAnalysis();
+    }
+
+    function changeAnalysisMode() {
+        analysisMode = document.getElementById('analysis-mode').value;
+        document.getElementById('analysis-timescale-wrap').style.display = (analysisMode === 'waveform') ? 'flex' : 'none';
+    }
+
+    socket.on('audio_analysis_data', (data) => {
+        if(!analysisActive) return;
+        for(let i=0; i<data.samples.length; i++) {
+            analysisSamples[analysisPointer] = data.samples[i];
+            analysisPointer = (analysisPointer + 1) % 480000;
+        }
+    });
+
+    function startDrawing() {
+        function draw() {
+            if(!analysisActive) return;
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if(analysisMode === 'waveform') drawWaveform();
+            else if(analysisMode === 'fft') drawFFT();
+            else if(analysisMode === 'spectrogram') drawSpectrogram();
+
+            animationId = requestAnimationFrame(draw);
+        }
+        draw();
+    }
+
+    const FFT_SIZE = 4096;
+    const SAMPLE_RATE = 48000;
+    const FREQ_LABELS =[20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+    const DB_LABELS =[0, -10, -20, -30, -40, -50, -60, -70, -80];
+    const RTA_BANDS =[20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000];
+    
+    let smoothedFFT = new Float32Array(FFT_SIZE / 2).fill(-120);
+    let smoothedRTA = new Float32Array(RTA_BANDS.length).fill(-120);
+
+    // Blackman-Harris mode window
+    const windowFunc = new Float32Array(FFT_SIZE);
+    for(let i=0; i<FFT_SIZE; i++) {
+        let t = (2 * Math.PI * i) / (FFT_SIZE - 1);
+        windowFunc[i] = 0.35875 - 0.48829 * Math.cos(t) + 0.14128 * Math.cos(2*t) - 0.01168 * Math.cos(3*t);
+    }
+
+    // FFT algorithm
+    function computeFFTMag(samples) {
+        let real = new Float32Array(FFT_SIZE);
+        let imag = new Float32Array(FFT_SIZE);
+        for(let i=0; i<FFT_SIZE; i++) real[i] = samples[i] * windowFunc[i];
+        
+        let n = FFT_SIZE, j = 0;
+        for (let i = 0; i < n - 1; i++) {
+            if (i < j) { let tr = real[i]; real[i] = real[j]; real[j] = tr; }
+            let k = n >> 1;
+            while (k <= j) { j -= k; k >>= 1; }
+            j += k;
+        }
+        for (let size = 2; size <= n; size *= 2) {
+            let half = size / 2;
+            let angleStep = -2 * Math.PI / size;
+            for (let i = 0; i < n; i += size) {
+                for (let j = 0; j < half; j++) {
+                    // Direct calculation to prevent the accumulation of errors
+                    let currR = Math.cos(angleStep * j);
+                    let currI = Math.sin(angleStep * j);
+                    let idx = i + j;
+                    let k = idx + half;
+                    let tr = currR * real[k] - currI * imag[k];
+                    let ti = currR * imag[k] + currI * real[k];
+                    real[k] = real[idx] - tr; 
+                    imag[k] = imag[idx] - ti;
+                    real[idx] += tr; 
+                    imag[idx] += ti;
+                }
+            }
+        }
+        let mag = new Float32Array(FFT_SIZE / 2);
+        for(let i=0; i<FFT_SIZE/2; i++) {
+            let m = Math.sqrt(real[i]*real[i] + imag[i]*imag[i]) / (FFT_SIZE / 2);
+            mag[i] = 20 * Math.log10(m + 1e-10);
+        }
+        return mag;
+    }
+
+    function getDpr() { return window.devicePixelRatio || 1; }
+    function freqToX(freq) { return (Math.log10(freq / 20) / Math.log10(20000 / 20)) * canvas.width; }
+    function dbToY(db) { return canvas.height - ((db + 90) / 90 * canvas.height); }
+
+    function drawGrid(showDb = true) {
+        const dpr = getDpr();
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)";
+        ctx.font = (11 * dpr) + "px 'Segoe UI', sans-serif";
+        
+        FREQ_LABELS.forEach(freq => {
+            const x = freqToX(freq);
+            ctx.strokeStyle = "rgba(255,255,255,0.08)";
+            ctx.lineWidth = dpr;
+            ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height - 20 * dpr); ctx.stroke();
+            
+            // Smart alignment to prevent text from being cut off at the edges
+            if(freq === 20) ctx.textAlign = "left";
+            else if(freq === 20000) ctx.textAlign = "right";
+            else ctx.textAlign = "center";
+            
+            ctx.fillText(freq >= 1000 ? (freq/1000)+"k" : freq, x, canvas.height - 5 * dpr);
+        });
+
+        if(showDb) {
+            ctx.textAlign = "left";
+            DB_LABELS.forEach(db => {
+                const y = dbToY(db);
+                if(y > 0 && y < canvas.height - 20 * dpr) {
+                    ctx.strokeStyle = db === 0 ? "rgba(255,50,50,0.4)" : "rgba(255,255,255,0.08)";
+                    ctx.lineWidth = dpr;
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+                    ctx.fillText(db, 5 * dpr, y - 4 * dpr);
+                }
+            });
+        }
+    }
+
+    function drawWaveform() {
+        const dpr = getDpr();
+        const samplesToDraw = parseInt(document.getElementById('analysis-timescale').value);
+        const halfH = canvas.height / 2;
+        const step = Math.max(1, samplesToDraw / canvas.width); 
+
+        ctx.fillStyle = '#1da1f2'; 
+        ctx.beginPath();
+        ctx.moveTo(0, halfH);
+        
+        for(let x=0; x<canvas.width; x++) {
+            let max = 0;
+            const startIdx = Math.floor(x * step);
+            const endIdx = Math.floor((x + 1) * step);
+            for(let j=startIdx; j<endIdx; j++) {
+                // Direct use of the pointer without smoothing to avoid artifacts
+                let idx = (analysisPointer - samplesToDraw + j + 480000) % 480000;
+                let val = analysisSamples[idx];
+                if(val > max) max = val;
+            }
+            ctx.lineTo(x, halfH - (max * halfH));
+        }
+        
+        for(let x=canvas.width-1; x>=0; x--) {
+            let min = 0;
+            const startIdx = Math.floor(x * step);
+            const endIdx = Math.floor((x + 1) * step);
+            for(let j=startIdx; j<endIdx; j++) {
+                let idx = (analysisPointer - samplesToDraw + j + 480000) % 480000;
+                let val = analysisSamples[idx];
+                if(val < min) min = val;
+            }
+            ctx.lineTo(x, halfH - (min * halfH));
+        }
+        ctx.closePath();
+        ctx.fill(); 
+
+        ctx.strokeStyle = "rgba(255,255,255,0.3)";
+        ctx.lineWidth = dpr;
+        ctx.beginPath(); ctx.moveTo(0, halfH); ctx.lineTo(canvas.width, halfH); ctx.stroke();
+    }
+
+    function drawFFT() {
+        const dpr = getDpr();
+        drawGrid(true);
+        const buffer = getLastSamples(FFT_SIZE);
+        const mag = computeFFTMag(buffer);
+        
+        // 1. Temporal smoothing
+        for(let i=0; i<mag.length; i++) smoothedFFT[i] = 0.75 * smoothedFFT[i] + 0.25 * mag[i]; 
+
+        // 2. Spatial smoothing (Moving Average) in order to eliminate the digital noise / peaks
+        const spatialSmoothed = new Float32Array(mag.length);
+        const windowSize = 4; // Smoothing force
+        for(let i=0; i<mag.length; i++) {
+            let sum = 0, count = 0;
+            for(let j=Math.max(0, i-windowSize); j<=Math.min(mag.length-1, i+windowSize); j++) {
+                sum += smoothedFFT[j];
+                count++;
+            }
+            spatialSmoothed[i] = sum / count;
+        }
+
+        let pts =[];
+        // Calculate points every 2 pixels to smooth the curve
+        for(let x=0; x<=canvas.width; x+=2) {
+            const freq = 20 * Math.pow(1000, x / canvas.width);
+            const floatBin = freq * FFT_SIZE / SAMPLE_RATE;
+            const bin = Math.min(mag.length - 1, Math.max(0, Math.floor(floatBin)));
+            
+            const frac = floatBin - bin;
+            const nextBin = Math.min(mag.length - 1, bin + 1);
+            const val = spatialSmoothed[bin] * (1 - frac) + spatialSmoothed[nextBin] * frac;
+
+            pts.push({ x: x, y: dbToY(val) });
+        }
+
+        // 3. High-quality rendering using Bézier curves (quadratic splines)
+        ctx.beginPath();
+        if (pts.length > 0) {
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length - 1; i++) {
+                const xc = (pts[i].x + pts[i+1].x) / 2;
+                const yc = (pts[i].y + pts[i+1].y) / 2;
+                ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+            }
+            ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+        }
+        
+        ctx.lineTo(canvas.width, canvas.height);
+        ctx.lineTo(0, canvas.height);
+        
+        let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "rgba(0, 229, 255, 0.6)");
+        grad.addColorStop(1, "rgba(0, 229, 255, 0.0)");
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Ridge line
+        ctx.beginPath();
+        if (pts.length > 0) {
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for (let i = 1; i < pts.length - 1; i++) {
+                const xc = (pts[i].x + pts[i+1].x) / 2;
+                const yc = (pts[i].y + pts[i+1].y) / 2;
+                ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
+            }
+            ctx.lineTo(pts[pts.length-1].x, pts[pts.length-1].y);
+        }
+        
+        ctx.strokeStyle = '#00e5ff'; 
+        ctx.lineWidth = 2 * dpr;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+    }
+
+    function drawRTA() {
+        const dpr = getDpr();
+        drawGrid(true);
+        const buffer = getLastSamples(FFT_SIZE);
+        const mag = computeFFTMag(buffer);
+
+        const gap = 2 * dpr;
+        const barWidth = (canvas.width / RTA_BANDS.length) - gap;
+        
+        for(let i=0; i<RTA_BANDS.length; i++) {
+            const freq = RTA_BANDS[i];
+            const lowerF = freq / Math.pow(2, 1/6);
+            const upperF = freq * Math.pow(2, 1/6);
+            
+            const binLow = Math.floor(lowerF * FFT_SIZE / SAMPLE_RATE);
+            const binHigh = Math.ceil(upperF * FFT_SIZE / SAMPLE_RATE);
+            
+            let maxDb = -120;
+            for(let j=binLow; j<=binHigh && j<mag.length; j++) {
+                if(mag[j] > maxDb) maxDb = mag[j];
+            }
+            
+            smoothedRTA[i] = 0.65 * smoothedRTA[i] + 0.35 * maxDb;
+            let y = dbToY(smoothedRTA[i]);
+            
+            // Preventing text from overflowing the bar
+            const bottomY = canvas.height - (20 * dpr);
+            if (y > bottomY) y = bottomY;
+            
+            let h = bottomY - y;
+            if(h < 0) h = 0;
+
+            let grad = ctx.createLinearGradient(0, canvas.height, 0, 0);
+            grad.addColorStop(0, "#00e676"); 
+            grad.addColorStop(0.5, "#ffea00"); 
+            grad.addColorStop(1, "#ff1744");
+            
+            const x = (i * (canvas.width / RTA_BANDS.length)) + (gap / 2);
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, barWidth, h);
+            
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(x, y - (2 * dpr), barWidth, 2 * dpr);
+        }
+    }
+
+    function drawAnalogVU() {
+        const dpr = getDpr();
+        const w = canvas.width / 2;
+        const h = canvas.height;
+        
+        const buffer = getLastSamples(1024);
+        let maxL = 0;
+        
+        // Calculate the peak value to match the decoder's “Output” display exactly
+        for(let i=0; i<buffer.length; i++) {
+            if(Math.abs(buffer[i]) > maxL) maxL = Math.abs(buffer[i]);
+        }
+        
+        // Direct dBFS display
+        let dbL = 20 * Math.log10(maxL + 1e-10); 
+        let dbR = dbL > -60 ? dbL - (Math.random() * 0.3) : dbL; 
+        
+        // Fine-tuned ballistics (rapid attack, smooth release to match the Peak Meter)
+        const attack = 0.3;
+        const release = 0.05;
+        vuNeedleL += (dbL > vuNeedleL ? attack : release) * (dbL - vuNeedleL);
+        vuNeedleR += (dbR > vuNeedleR ? attack : release) * (dbR - vuNeedleR);
+
+        function drawMeter(x, y, width, height, needleVal, label) {
+            ctx.fillStyle = "#161616";
+            ctx.fillRect(x, y, width, height);
+            
+            const marginX = 25 * dpr, marginY = 25 * dpr;
+            const mx = x + marginX, my = y + marginY;
+            const mw = width - marginX*2, mh = height - marginY*2;
+            
+            let bgGrad = ctx.createLinearGradient(mx, my, mx, my+mh);
+            bgGrad.addColorStop(0, "#f9eebb");
+            bgGrad.addColorStop(1, "#dfc686");
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(mx, my, mw, mh);
+            
+            // Internal drop shadow (frame)
+            ctx.strokeStyle = "rgba(0,0,0,0.7)";
+            ctx.lineWidth = 5 * dpr;
+            ctx.strokeRect(mx, my, mw, mh);
+            
+            const cx = mx + mw/2;
+            const cy = my + mh * 0.88;
+            const radius = mh * 0.7;
+            
+            ctx.textAlign = "center";
+            ctx.textBaseline = "bottom";
+            ctx.font = `bold ${11.5*dpr}px 'Segoe UI', sans-serif`;
+            
+            // Lower guide arch
+            ctx.strokeStyle = "rgba(0,0,0,0.1)";
+            ctx.lineWidth = 10 * dpr;
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius - 5*dpr, -Math.PI/2 - Math.PI/3.5, -Math.PI/2 + Math.PI/3.5);
+            ctx.stroke();
+
+            // Extended range from -60 to +5 dB
+            const ticks =[-60, -50, -40, -35, -30, -25, -20, -15, -10, -5, 0, 1, 2, 3, 4, 5];
+            const textTicks =[-60, -50, -40, -30, -20, -10, -5, 0, 5];
+            ticks.forEach(t => {
+                let pct = (t - (-60)) / 65; 
+                let ang = -Math.PI/3.5 + pct * (Math.PI*2/3.5); 
+                
+                let tx1 = cx + Math.sin(ang) * radius;
+                let ty1 = cy - Math.cos(ang) * radius;
+                let tx2 = cx + Math.sin(ang) * (radius - 12*dpr);
+                let ty2 = cy - Math.cos(ang) * (radius - 12*dpr);
+                
+                ctx.strokeStyle = t >= 0 ? "#cc0000" : "#222";
+                ctx.lineWidth = (t === 0 ? 3 : (textTicks.includes(t) ? 2 : 1)) * dpr;
+                ctx.beginPath(); ctx.moveTo(tx1, ty1); ctx.lineTo(tx2, ty2); ctx.stroke();
+                
+                if(textTicks.includes(t)) {
+                    let tx3 = cx + Math.sin(ang) * (radius - 26*dpr);
+                    let ty3 = cy - Math.cos(ang) * (radius - 26*dpr);
+                    ctx.fillStyle = t >= 0 ? "#cc0000" : "#222";
+                    ctx.fillText(t>0 ? "+"+t : t, tx3, ty3);
+                }
+            });
+            
+            // Silkscreen print
+            ctx.fillStyle = "#222";
+            ctx.font = `bold ${26*dpr}px 'Segoe UI', sans-serif`;
+            ctx.fillText("VU", mx + 50*dpr, my + 45*dpr);
+            ctx.font = `bold ${18*dpr}px 'Segoe UI', sans-serif`;
+            ctx.fillText(label, mx + mw - 40*dpr, my + 45*dpr);
+            
+            // Calculate needle angle
+            let npct = (needleVal - (-60)) / 65;
+            if(npct < -0.05) npct = -0.05; if(npct > 1.05) npct = 1.05;
+            let nang = -Math.PI/3.5 + npct * (Math.PI*2/3.5);
+            
+            // Shadow effect for the needle
+            ctx.strokeStyle = "rgba(0,0,0,0.3)";
+            ctx.lineWidth = 4 * dpr;
+            ctx.lineCap = "round";
+            ctx.beginPath();
+            ctx.moveTo(cx + 4*dpr, cy + 4*dpr);
+            ctx.lineTo(cx + 4*dpr + Math.sin(nang) * (radius + 8*dpr), cy + 4*dpr - Math.cos(nang) * (radius + 8*dpr));
+            ctx.stroke();
+
+            // Needle
+            ctx.strokeStyle = "#111";
+            ctx.lineWidth = 3.5 * dpr;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + Math.sin(nang) * (radius + 8*dpr), cy - Math.cos(nang) * (radius + 8*dpr));
+            ctx.stroke();
+            
+            // Center screw (Pivot)
+            ctx.fillStyle = "#000";
+            ctx.beginPath(); ctx.arc(cx, cy, 12*dpr, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "#444";
+            ctx.beginPath(); ctx.arc(cx, cy, 5*dpr, 0, Math.PI*2); ctx.fill();
+        }
+        
+        drawMeter(0, 0, w, h, vuNeedleL, "L");
+        drawMeter(w, 0, w, h, vuNeedleR, "R");
+    }
+
+    // Helpers
+    function getLastSamples(size) {
+        let b = new Float32Array(size);
+        for(let i=0; i<size; i++) b[i] = analysisSamples[(analysisPointer - size + i + 480000) % 480000];
+        return b;
+    }
+
+    function startDrawing() {
+        function draw() {
+            if(!analysisActive) return;
+            
+            const dpr = getDpr();
+            const rect = canvas.getBoundingClientRect();
+            
+            if(canvas.width !== Math.floor(rect.width * dpr)) {
+                canvas.width = Math.floor(rect.width * dpr);
+                canvas.height = Math.floor(rect.height * dpr);
+            }
+
+            ctx.fillStyle = '#0a0a0a'; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if(analysisMode === 'waveform') drawWaveform();
+            else if(analysisMode === 'fft') drawFFT();
+            else if(analysisMode === 'rta') drawRTA();
+            else if(analysisMode === 'analog_vu') drawAnalogVU();
+
+            animationId = requestAnimationFrame(draw);
+        }
+        draw();
+    }
+</script>
+{% endif %}
+</body>
+</html>
