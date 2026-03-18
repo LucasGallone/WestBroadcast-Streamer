@@ -86,7 +86,7 @@ For the next startups, simply run `Launch.bat` as you did during the initial ins
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
 ## Legal Notices and Licenses
 ### WestBroadcast Streamer
-This project is licensed under the GNU GPL v3.0. Please refer to the `LICENSE` file for more details.
+This project is licensed under the GNU General Public License (GPL) v3.0. Please refer to the `LICENSE` file for more details.
 ### FFmpeg and FFprobe
 This software uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
 <br>
