@@ -1,5 +1,5 @@
 # WestBroadcast Streamer
-WestBroadcast Streamer is more than just an Audio over IP decoder. It transforms a computer into a full-fledged broadcasting tool with two backup sources, ensuring that a program is always broadcast over an FM transmitter, for example. Email alerts keep you informed of any potential issues with the sources in use.
+WestBroadcast Streamer is more than a simple Audio over IP decoder. It transforms a computer into a full-fledged broadcasting tool with two backup sources, ensuring that a program is always broadcast over an FM transmitter, for example. Email alerts keep you informed of any potential issues with the sources in use.
 <br>
 <br>
 This broadcasting solution is primarily suited for small radio stations that, for cost reasons, prefer to use a computer to receive their audio stream via IP in order to broadcast from a transmitter site. It can also be used in a small store or even at home to provide continuous background music, without worrying about potential network or IP stream issues. 
