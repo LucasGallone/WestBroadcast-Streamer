@@ -34,7 +34,7 @@ WestBroadcast Streamer runs as a portable installer. This means you can use it a
 • Alert mails being sent in case of anomalies detected on one of your sources, to keep you informed of the decoder and broadcast status.
 <br>
 <br>
-• The ability to analyze the audio output in various ways, view system logs, and much more...
+• The ability to analyze the audio output in various ways, view system/authentication logs, and much more...
 <br>
 <br>
 For further details, visit the Wiki section by clicking here.
