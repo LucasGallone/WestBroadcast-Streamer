@@ -46,7 +46,7 @@ Any quality feedback regarding other operating systems is welcome!
 • The ability to analyze the audio output in various ways, view system/authentication logs, and much more...
 <br>
 <br>
-For further details, [visit the Wiki section by clicking here](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki).
+For further details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
 ## 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/archive/refs/heads/main.zip)
 <br>
@@ -54,7 +54,7 @@ For further details, [visit the Wiki section by clicking here](https://github.co
 -> Extract the content of the .zip file and place the files wherever you like.
 <br>
 <br>
--> Install Python 3.10 or later on your computer from the official website [by clicking here](https://www.python.org/downloads/).
+-> Install Python 3.10 or later on your computer from the official website [by clicking here.](https://www.python.org/downloads/)
 <br>
 <b>IMPORTANT: When installing Python, make sure to check the "Add Python to PATH" box, otherwise the decoder will not work properly!</b>
 <br>
@@ -77,7 +77,7 @@ Be sure to keep this window open on the host machine (it's used for audio output
 ## 2. Configuration
 You must configure the decoder via the web interface (Default login credentials: admin / admin).
 <br>
-For more details, [visit the Wiki section by clicking here](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki).
+For more details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
 ## 3. Starting the decoder after the initial setup
 For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
@@ -89,9 +89,9 @@ This software uses the FFmpeg and FFprobe libraries and executables for processi
 <br>
 • License: FFmpeg is licensed under the GNU General Public License (GPL).
 <br>
-• Redistribution: The binaries provided in this repository are unmodified static versions compiled by [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
+• Redistribution: The binaries provided in this repository are unmodified static versions compiled by [Gyan.dev.](https://www.gyan.dev/ffmpeg/builds/)
 <br>
-• Source Code: In accordance with the GPL license, the FFmpeg source code is available on [ffmpeg.org](https://ffmpeg.org/).
+• Source Code: In accordance with the GPL license, the FFmpeg source code is available on [ffmpeg.org.](https://ffmpeg.org/)
 <br>
 • Trademark: FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
 <br>
