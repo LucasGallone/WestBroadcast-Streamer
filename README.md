@@ -79,7 +79,9 @@ Be sure to keep this window open on the host machine (it's used for audio output
 ## 2. Configuration
 You must configure the decoder via the web interface.
 <br>
-The default port is 8090 and the credentials are admin / admin. (Changing the credentials at your first use is STRONGLY recommended!)
+The default port is 8090 and the credentials are admin / admin.
+<br>
+(Changing the credentials at first use is STRONGLY recommended to prevent any unauthorized access!)
 <br>
 <br>
 For more details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
