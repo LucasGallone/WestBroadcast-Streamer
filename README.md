@@ -24,7 +24,7 @@ Any quality feedback regarding other operating systems is welcome!
 ![wbcast-streamer-1](https://github.com/user-attachments/assets/682a5d37-3c42-4aba-932b-05560d605946)
 ![wbcast-streamer-2](https://github.com/user-attachments/assets/2f85969d-9c40-4924-b766-fb4f25107365)
 ## What this tool offers
-• Full control over the reception and playback of audio sources via a secure and remotely controllable webserver with two different accounts (Administrator and Operator).
+• Full control over the reception and playback of audio sources via a secure and remotely controllable webserver with two different accounts (Administrator and Operator). Monitoring of input and output audio thanks to VU meters.
 <br>
 <br>
 • Two backup sources that are automatically triggered if silence is detected on the main audio stream (or in case the streaming server becomes inaccessible). The rules for detecting silence and restoring audio can be configured according to the user’s preferences.
