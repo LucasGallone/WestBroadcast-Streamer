@@ -1,36 +1,61 @@
 # WestBroadcast Streamer
-WestBroadcast Streamer is more than just an audio-over-IP decoder. It transforms a computer into a full-fledged broadcasting tool with two backup sources, ensuring that a program is always broadcast over an FM transmitter, for example. Email alerts keep you informed of any potential issues with the sources in use.
+WestBroadcast Streamer is more than just an Audio over IP decoder. It transforms a computer into a full-fledged broadcasting tool with two backup sources, ensuring that a program is always broadcast over an FM transmitter, for example. Email alerts keep you informed of any potential issues with the sources in use.
 <br>
 <br>
-This broadcasting solution is primarily suited for small radio stations that, for cost reasons, prefer to use a computer to receive their program via IP and broadcast it from a transmission site. It can also be used in a small store or even at home to provide continuous background music, without worrying about potential network or IP stream issues. 
+This broadcasting solution is primarily suited for small radio stations that, for cost reasons, prefer to use a computer to receive their audio stream via IP in order to broadcast from a transmitter site. It can also be used in a small store or even at home to provide continuous background music, without worrying about potential network or IP stream issues. 
 <br>
 <br>
-Entirely open source, this solution is based on the FFmpeg and FFprobe audio engines, as well as a Python script. The decoder is configured and monitored via a secure web interface. 
+Entirely open source, this solution is based on the FFmpeg audio engine and FFprobe, as well as a Python script. The decoder is configured and monitored via a secure web interface. 
 <br>
 <br>
 WestBroadcast Streamer runs as a portable installer. This means you can use it anywhere, even from an external hard drive or a USB drive. 
 <br>
 <br>
 <b>IMPORTANT NOTE: At this time, the decoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
+## What this tool offers
+• Full control over the reception and playback of audio sources via a secure and remotely controllable webserver with two different accounts (Administrator and Operator).
+<br>
+<br>
+• Two backup sources that are automatically triggered if silence is detected on the main audio stream (or in case the streaming server becomes inaccessible). The rules for detecting silence and restoring audio can be configured according to the user’s preferences.
+<br>
+<br>
+• Playback of IP streams (HTTP and HTTPS), RTP streams, audio input devices, local files (such as backup loops), and tests tones thanks to a generator.
+<br>
+<br>
+• A server for uploading backup files remotely.
+<br>
+<br>
+• Full control over input and output gain (dB), as well as buffer sizes.
+<br>
+<br>
+• Export of metadata (Current song title), if available on the IP stream, to a text file on the host machine, with the option to convert letters to uppercase and remove accents. This is useful for displaying songs titles on Radiotext (RDS).
+<br>
+<br>
+• Alert mails being sent in case of anomalies detected on one of your sources, to keep you informed of the decoder and broadcast status.
+<br>
+<br>
+• The ability to analyze the audio output in various ways, view system logs, and much more...
+<br>
+<br>
+For further details, visit the Wiki section by clicking here.
 ## 1. Installation instructions for Windows
-• Install Python 3.10 or later on your computer from the official website [by clicking here](https://www.python.org/downloads/).
+-> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/archive/refs/heads/main.zip)
 <br>
 <br>
-• [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/archive/refs/heads/main.zip)
+-> Extract the content of the .zip file and place the files wherever you like.
 <br>
 <br>
-• <b>Important: When installing Python, be sure to check the "Add Python to PATH" box, otherwise the decoder will not work properly!</b>
+-> Install Python 3.10 or later on your computer from the official website [by clicking here](https://www.python.org/downloads/).
+<br>
+<b>Important: When installing Python, make sure to check the "Add Python to PATH" box, otherwise the decoder will not work properly!</b>
 <br>
 <br>
-• Ideally, as is customary, restart your computer after installing Python.
+-> Ideally, as is customary, restart your computer after installing Python.
 <br>
 <br>
-• Extract the content of the .zip file and place the files wherever you like.
+-> Go back to the folder containing the decoder files, and run `Launcher.bat`.
 <br>
-<br>
-• Run the Launcher.bat file.
-<br>
--> When started for the first time, it will install the Python dependencies required for the decoder to work properly. This may take a few minutes.
+When started for the first time, it will install the Python dependencies required for the decoder to work properly. This may take a few minutes.
 <br>
 Even if nothing appears to be happening on the terminal, please wait until the process is complete.
 <br>
@@ -45,7 +70,7 @@ You must configure the decoder via the web interface (Default login credentials:
 <br>
 For more details, visit the Wiki section by clicking here.
 ## 3. Starting the decoder after the initial setup
-For the next startups, simply run Launch.bat as you did during the initial installation.
+For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
 ## Legal Notices and Licenses
