@@ -52,7 +52,7 @@ For further details, visit the Wiki section by clicking here.
 <br>
 -> Install Python 3.10 or later on your computer from the official website [by clicking here](https://www.python.org/downloads/).
 <br>
-<b>Important: When installing Python, make sure to check the "Add Python to PATH" box, otherwise the decoder will not work properly!</b>
+<b>IMPORTANT: When installing Python, make sure to check the "Add Python to PATH" box, otherwise the decoder will not work properly!</b>
 <br>
 <br>
 -> Ideally, as is customary, restart your computer after installing Python.
