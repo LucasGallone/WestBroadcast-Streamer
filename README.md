@@ -91,7 +91,7 @@ This project is licensed under the GNU GPL v3.0. Please refer to the `LICENSE` f
 This software uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
 <br>
 <br>
-• License: FFmpeg is licensed under the GNU General Public License (GPL).
+• License: FFmpeg is licensed under the GNU General Public License (GPL) v3.0.
 <br>
 • Redistribution: The binaries provided in this repository are unmodified static versions compiled by [Gyan.dev.](https://www.gyan.dev/ffmpeg/builds/)
 <br>
