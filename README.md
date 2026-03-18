@@ -21,7 +21,7 @@ This software has been tested on several computers running Windows 10 and 11, wi
 Any quality feedback regarding other operating systems is welcome!
 <br>
 <br>
-![wbcast-streamer-1](https://github.com/user-attachments/assets/682a5d37-3c42-4aba-932b-05560d605946)
+![wbcast-streamer-1](https://github.com/user-attachments/assets/2e544432-b65b-4c47-a677-1f6f809fbac9)
 ![wbcast-streamer-2](https://github.com/user-attachments/assets/2f85969d-9c40-4924-b766-fb4f25107365)
 ## What this tool offers
 • Full control over the reception and playback of audio sources via a secure and remotely controllable webserver with two different accounts (Administrator and Operator). Monitoring of input and output audio thanks to VU meters.
