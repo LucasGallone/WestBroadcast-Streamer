@@ -12,6 +12,11 @@ WestBroadcast Streamer runs as a portable installer. This means you can use it a
 <br>
 <br>
 <b>IMPORTANT NOTE: At this time, the decoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
+<br>
+<br>
+This software has been tested on several computers running Windows 10 and 11, with success.
+<br>
+Any quality feedback regarding other operating systems is welcome!
 ## What this tool offers
 • Full control over the reception and playback of audio sources via a secure and remotely controllable webserver with two different accounts (Administrator and Operator).
 <br>
