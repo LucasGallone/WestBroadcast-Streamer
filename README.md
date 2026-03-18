@@ -57,7 +57,7 @@ This software uses the FFmpeg and FFprobe libraries and executables for processi
 <br>
 • Redistribution: The binaries provided in this repository are unmodified static versions compiled by [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
 <br>
-• Source Code: In accordance with the GPL license, the FFmpeg source code is available on the official [ffmpeg.org](https://ffmpeg.org/) website.
+• Source Code: In accordance with the GPL license, the FFmpeg source code is available on [ffmpeg.org](https://ffmpeg.org/).
 <br>
 • Trademark: FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
 <br>
