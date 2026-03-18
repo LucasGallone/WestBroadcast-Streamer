@@ -48,3 +48,36 @@ For more details, visit the Wiki section by clicking here.
 For the next startups, simply run Launch.bat as you did during the initial installation.
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
+## Legal Notices and Licenses
+### FFmpeg and FFprobe
+This software uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
+<br>
+<br>
+• License: FFmpeg is licensed under the GNU General Public License (GPL).
+<br>
+• Redistribution: The binaries provided in this repository are unmodified static versions compiled by [Gyan.dev](https://www.gyan.dev/ffmpeg/builds/).
+<br>
+• Source Code: In accordance with the GPL license, the FFmpeg source code is available on the official [ffmpeg.org](https://ffmpeg.org/) website.
+<br>
+• Trademark: FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
+<br>
+<br>
+For more details, please check the `FFmpeg-license.txt` file included in this repository.
+### Socket.io (Client JavaScript)
+The socket.io.js file included in the /static folder is part of the Socket.io library.
+<br>
+<br>
+License: MIT License.
+<br>
+Copyright (c) 2014-2025 Automattic.
+### Python Dependencies
+This project uses the following libraries, automatically installed by the Launcher script:
+<br>
+<br>
+• Flask / Werkzeug: BSD-3-Clause License.
+<br>
+• Flask-SocketIO: MIT License.
+<br>
+• Sounddevice / PortAudio: MIT License.
+<br>
+• NumPy: BSD-3-Clause License.
