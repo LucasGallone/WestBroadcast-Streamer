@@ -5,7 +5,9 @@ WestBroadcast Streamer is more than just an Audio over IP decoder. It transforms
 This broadcasting solution is primarily suited for small radio stations that, for cost reasons, prefer to use a computer to receive their audio stream via IP in order to broadcast from a transmitter site. It can also be used in a small store or even at home to provide continuous background music, without worrying about potential network or IP stream issues. 
 <br>
 <br>
-Entirely open source, this solution is based on the FFmpeg audio engine and FFprobe, as well as a Python script. The decoder is configured and monitored via a secure web interface. 
+Entirely open source, this solution is based on the FFmpeg audio engine and FFprobe, as well as a Python script.
+<br>
+The decoder is configured and monitored via a secure web interface. 
 <br>
 <br>
 WestBroadcast Streamer runs as a portable installer. This means you can use it anywhere, even from an external hard drive or a USB drive. 
