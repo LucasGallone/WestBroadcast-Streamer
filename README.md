@@ -63,7 +63,7 @@ This software uses the FFmpeg and FFprobe libraries and executables for processi
 <br>
 <br>
 For more details, please check the `FFmpeg-license.txt` file included in this repository.
-### Socket.io (Client JavaScript)
+### Socket.io (JavaScript Client)
 The socket.io.js file included in the /static folder is part of the Socket.io library.
 <br>
 <br>
