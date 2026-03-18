@@ -40,13 +40,13 @@ Any quality feedback regarding other operating systems is welcome!
 • Export of metadata (Current song title), if available on the IP stream, to a text file on the host machine, with the option to convert letters to uppercase and remove accents. This is useful for displaying songs titles on Radiotext (RDS).
 <br>
 <br>
-• Alert mails being sent in case of anomalies detected on one of your sources, to keep you informed of the decoder and broadcast status.
+• Alert mails being sent via SMTP in case of anomalies detected on one of your sources, to keep you informed of the decoder and broadcast status.
 <br>
 <br>
 • The ability to analyze the audio output in various ways, view system/authentication logs, and much more...
 <br>
 <br>
-For further details, visit the Wiki section by clicking here.
+For further details, [visit the Wiki section by clicking here](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki).
 ## 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/archive/refs/heads/main.zip)
 <br>
@@ -77,7 +77,7 @@ Be sure to keep this window open on the host machine (it's used for audio output
 ## 2. Configuration
 You must configure the decoder via the web interface (Default login credentials: admin / admin).
 <br>
-For more details, visit the Wiki section by clicking here.
+For more details, [visit the Wiki section by clicking here](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki).
 ## 3. Starting the decoder after the initial setup
 For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
