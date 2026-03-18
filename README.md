@@ -62,7 +62,7 @@ This software uses the FFmpeg and FFprobe libraries and executables for processi
 • Trademark: FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
 <br>
 <br>
-For more details, please check the `FFmpeg-license.txt` file included in this repository.
+For more details, please check the `ffmpeg-license.txt` file included in this repository.
 ### Socket.io (JavaScript Client)
 The socket.io.js file included in the /static folder is part of the Socket.io library.
 <br>
