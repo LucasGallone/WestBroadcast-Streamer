@@ -77,7 +77,10 @@ A Python window will open, displaying your machine's IP address, the port used b
 <br>
 Be sure to keep this window open on the host machine (it's used for audio output), as well as the terminal!
 ## 2. Configuration
-You must configure the decoder via the web interface (Default login credentials: admin / admin).
+You must configure the decoder via the web interface.
+<br>
+The default port is 8090 and the credentials are admin / admin. (Changing the credentials at your first use is STRONGLY recommended!)
+<br>
 <br>
 For more details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
 ## 3. Starting the decoder after the initial setup
