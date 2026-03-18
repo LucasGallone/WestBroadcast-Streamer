@@ -85,6 +85,8 @@ For the next startups, simply run `Launch.bat` as you did during the initial ins
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
 ## Legal Notices and Licenses
+### WestBroadcast Streamer
+This project is licensed under the GNU GPL v3.0. Please refer to the `LICENSE` file for more details.
 ### FFmpeg and FFprobe
 This software uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
 <br>
@@ -98,7 +100,7 @@ This software uses the FFmpeg and FFprobe libraries and executables for processi
 • Trademark: FFmpeg is a registered trademark of Fabrice Bellard, creator of the FFmpeg project.
 <br>
 <br>
-For more details, please refer to the `ffmpeg-license.txt` file included in this repository.
+For more details, please refer to the `FFmpeg-LICENSE.txt` file included in this repository.
 ### Socket.io (JavaScript Client)
 The socket.io.js file included in the /static folder is part of the Socket.io library.
 <br>
