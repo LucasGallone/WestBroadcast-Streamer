@@ -56,7 +56,7 @@ For further details, [visit the Wiki section by clicking here.](https://github.c
 -> Extract the content of the .zip file and place the files wherever you like.
 <br>
 <br>
--> Install Python 3.10 or later on your computer from the official website [by clicking here.](https://www.python.org/downloads/)
+-> Install Python 3.10 or newer on your computer from the official website [by clicking here.](https://www.python.org/downloads/)
 <br>
 <b>IMPORTANT: When installing Python, make sure to check the "Add Python to PATH" box, otherwise the decoder will not work properly!</b>
 <br>
@@ -89,6 +89,10 @@ For more details, [visit the Wiki section by clicking here.](https://github.com/
 For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
+## 💡 Troubleshooting
+Having trouble with the software? [Check out this Wiki section to see if that helps.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki/%F0%9F%92%A1-Troubleshooting)
+<br>
+If not, feel free to open an "issue" with as much detail as possible.
 ## Legal Notices and Licenses
 ### WestBroadcast Streamer
 This project is licensed under the GNU General Public License (GPL) v3.0.
