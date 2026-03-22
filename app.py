@@ -42,9 +42,9 @@ DEFAULT_CONFIG = {
     'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
-        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-main.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup1.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup2.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
+        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-main.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
+        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup1.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
+        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup2.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
     ],
     'settings': {
         'loss_threshold_db': -45.0,
@@ -90,6 +90,7 @@ def load_config():
                     
             if 'fm' not in cfg: cfg['fm'] = DEFAULT_CONFIG['fm'].copy()
             if 'fm' not in cfg: cfg['fm'] = DEFAULT_CONFIG['fm'].copy()
+            if 'playlists' not in cfg: cfg['playlists'] = {}
             if 'output_latency_ms' not in cfg['audio']: cfg['audio']['output_latency_ms'] = 1000
             if 'preemph' in cfg['fm']: del cfg['fm']['preemph']
             if 'smtp' not in cfg: cfg['smtp'] = DEFAULT_CONFIG['smtp'].copy()
@@ -110,6 +111,8 @@ def load_config():
                 if 'path' not in src or src['path'] is None: src['path'] = ''
                 if 'url' not in src or src['url'] is None: src['url'] = ''
                 if 'backup_file' not in src: src['backup_file'] = ''
+                if 'backup_playlist_name' not in src: src['backup_playlist_name'] = ''
+                if 'backup_mode' not in src: src['backup_mode'] = 'single'
                 if 'rtp_uri' not in src: src['rtp_uri'] = ''
                 if 'repeat' not in src: src['repeat'] = True
                 if 'buffer_kb' not in src: src['buffer_kb'] = 1024
@@ -122,6 +125,10 @@ def load_config():
                 if 'meta_normalize' not in src: src['meta_normalize'] = False
                 if 'meta_only_played' not in src: src['meta_only_played'] = False
                 if 'meta_uppercase' not in src: src['meta_uppercase'] = False
+                if 'meta_rtplus' not in src: src['meta_rtplus'] = False
+                if 'meta_rtplus_format' not in src: src['meta_rtplus_format'] = 'artist_title'
+                if 'meta_rtplus_separator' not in src: src['meta_rtplus_separator'] = ' - '
+                if 'meta_max_64' not in src: src['meta_max_64'] = False
                 if 'alert_silent' not in src: src['alert_silent'] = False
                 if 'alert_unreachable' not in src: src['alert_unreachable'] = False
 
@@ -281,6 +288,7 @@ class SourceChannel:
         if self.running: return
         self.running = True
         self.is_reconnecting = False # Reset
+        self.playlist_idx = 0 # Position initialization
         
         src = CONFIG['sources'][self.index]
         buf_kb = src.get('buffer_kb', 1024)
@@ -337,8 +345,13 @@ class SourceChannel:
                 if not self.codec_info or (src['type'] == 'stream' and 'Kbps' not in self.codec_info):
                     if src['type'] == 'rtp': target = src['rtp_uri']
                     elif src['type'] == 'file': target = src['path']
-                    elif src['type'] == 'backup_dir' and src.get('backup_file'): 
-                        target = os.path.join(BACKUP_DIR, src['backup_file'])
+                    elif src['type'] == 'backup_dir':
+                        if src.get('backup_mode', 'single') == 'single' and src.get('backup_file'):
+                            target = os.path.join(BACKUP_DIR, src['backup_file'])
+                        elif src.get('backup_mode', 'single') == 'playlist' and src.get('backup_playlist_name'):
+                            playlist = CONFIG.get('playlists', {}).get(src['backup_playlist_name'], [])
+                            p_idx = getattr(self, 'playlist_idx', 0)
+                            if p_idx < len(playlist): target = os.path.join(BACKUP_DIR, playlist[p_idx])
                     elif src['type'] == 'stream': target = src['url']
                     
                     if target:
@@ -392,10 +405,18 @@ class SourceChannel:
         if src['type'] == 'rtp' and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'device' and src.get('input_device') is None: return "NOT CONFIGURED", "#999"
         if src['type'] == 'file' and not src['path']: return "NOT CONFIGURED", "#999"
-        if src['type'] == 'backup_dir' and not src.get('backup_file'): return "NOT CONFIGURED", "#999"
+        if src['type'] == 'backup_dir':
+            if src.get('backup_mode', 'single') == 'single' and not src.get('backup_file'): return "NOT CONFIGURED", "#999"
+            if src.get('backup_mode', 'single') == 'playlist' and not src.get('backup_playlist_name'): return "NOT CONFIGURED", "#999"
         
         if src['type'] == 'file' and src['path'] and not os.path.exists(src['path']): return "FILE NOT FOUND", "#b00"
-        if src['type'] == 'backup_dir' and src.get('backup_file') and not os.path.exists(os.path.join(BACKUP_DIR, src['backup_file'])): return "FILE NOT FOUND", "#b00"
+        if src['type'] == 'backup_dir':
+            if src.get('backup_mode', 'single') == 'single':
+                if src.get('backup_file') and not os.path.exists(os.path.join(BACKUP_DIR, src['backup_file'])): return "FILE NOT FOUND", "#b00"
+            else:
+                p_idx = getattr(self, 'playlist_idx', 0)
+                playlist = CONFIG.get('playlists', {}).get(src.get('backup_playlist_name', ''), [])
+                if playlist and p_idx < len(playlist) and not os.path.exists(os.path.join(BACKUP_DIR, playlist[p_idx])): return "FILE NOT FOUND", "#b00"
 
         if self.running and self.status_text == "UNREACHABLE":
              return "UNREACHABLE", "#8B0000"
@@ -488,12 +509,28 @@ class SourceChannel:
                 else:
                     self.status_text = "FILE ERROR"
             elif src['type'] == 'backup_dir':
-                bpath = os.path.join(BACKUP_DIR, src.get('backup_file', ''))
-                if src.get('backup_file') and os.path.exists(bpath):
-                    valid = True
-                    cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-stream_loop', '-1', '-re', '-i', bpath] + filter_arg
+                if src.get('backup_mode', 'single') == 'single':
+                    bpath = os.path.join(BACKUP_DIR, src.get('backup_file', ''))
+                    if src.get('backup_file') and os.path.exists(bpath):
+                        valid = True
+                        cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-stream_loop', '-1', '-re', '-i', bpath] + filter_arg
+                    else:
+                        self.status_text = "FILE ERROR"
                 else:
-                    self.status_text = "FILE ERROR"
+                    playlist = CONFIG.get('playlists', {}).get(src.get('backup_playlist_name', ''), [])
+                    if playlist:
+                        if getattr(self, 'playlist_idx', 0) >= len(playlist):
+                            self.playlist_idx = 0
+                        p_idx = self.playlist_idx
+                        bpath = os.path.join(BACKUP_DIR, playlist[p_idx])
+                        if os.path.exists(bpath):
+                            valid = True
+                            cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re', '-i', bpath] + filter_arg
+                        else:
+                            self.status_text = "FILE ERROR"
+                            self.playlist_idx += 1
+                    else:
+                        self.status_text = "FILE ERROR"
             elif src['type'] == 'rtp':
                 if src['rtp_uri']:
                     valid = True
@@ -542,7 +579,10 @@ class SourceChannel:
 
                 while self.running:
                     raw = self.process.stdout.read(BLOCK_SIZE * 2 * CHANNELS)
-                    if not raw: break
+                    if not raw:
+                        if self.process.poll() is not None: break
+                        time.sleep(0.01)
+                        continue
                     
                     self.last_data_time = time.time()
                     
@@ -556,10 +596,19 @@ class SourceChannel:
 
             except Exception as e:
                 self.status_text = "UNREACHABLE"
+                # On ne met pas de break ici pour laisser le finally gérer la reconnexion
             finally:
+                is_normal_eof = False
                 if self.process:
+                    if self.process.poll() == 0: is_normal_eof = True
                     try: self.process.kill()
                     except: pass
+            
+            # SORTI DU BLOC FINALLY : Enchaînement de la playlist
+            if self.running and src['type'] == 'backup_dir' and src.get('backup_mode', 'single') == 'playlist' and valid and is_normal_eof:
+                self.playlist_idx = getattr(self, 'playlist_idx', 0) + 1
+                time.sleep(0.1)
+                continue
                 
                 self.status_text = "UNREACHABLE"
                 self.is_reconnecting = True
@@ -702,9 +751,16 @@ class BroadcastEngine:
                 elif src['type'] == 'file' and src['path']:
                     title = os.path.basename(src['path'])
                     raw_titles[i] = title
-                elif src['type'] == 'backup_dir' and src.get('backup_file'):
-                    title = src['backup_file']
-                    raw_titles[i] = title
+                elif src['type'] == 'backup_dir':
+                    if src.get('backup_mode', 'single') == 'single' and src.get('backup_file'):
+                        title = src['backup_file']
+                        raw_titles[i] = title
+                    elif src.get('backup_mode', 'single') == 'playlist' and src.get('backup_playlist_name'):
+                        playlist = CONFIG.get('playlists', {}).get(src['backup_playlist_name'], [])
+                        p_idx = getattr(self.channels[i], 'playlist_idx', 0)
+                        if p_idx < len(playlist):
+                            title = playlist[p_idx]
+                            raw_titles[i] = title
                 elif src['type'] == 'tone':
                     title = "Test Tone Generator"
                     raw_titles[i] = title
@@ -730,6 +786,23 @@ class BroadcastEngine:
                     # Uppercase logic (applied AFTER the characters normalization / accents removal)
                     if src.get('meta_uppercase'):
                         final_title = final_title.upper()
+
+                    # Apply a strict limit on the output TXT to 64 characters for the Radiotext function (RDS)
+                    if src.get('meta_max_64') and len(final_title) > 64:
+                        final_title = final_title[:61] + "..."
+
+                    # Radiotext+ / StereoTool formatting
+                    if src.get('meta_rtplus'):
+                        # Special characters must be escaped in Stereo Tool (even if there is no artist or title)
+                        final_title = final_title.replace(':', '\\:').replace('/', '\\/')
+                        
+                        separator = src.get('meta_rtplus_separator', ' - ')
+                        if separator in final_title:
+                            parts = final_title.split(separator, 1)
+                            if src.get('meta_rtplus_format') == 'title_artist':
+                                final_title = f"\\+Ti{parts[0]}\\-{separator}\\+Ar{parts[1]}\\-"
+                            else:
+                                final_title = f"\\+Ar{parts[0]}\\-{separator}\\+Ti{parts[1]}\\-"
 
                     if final_title != last_titles[i]:
                         last_titles[i] = final_title
@@ -761,7 +834,9 @@ class BroadcastEngine:
                 
                 if should_run:
                     if src_cfg['type'] == 'file' and not src_cfg['path']: should_run = False
-                    if src_cfg['type'] == 'backup_dir' and not src_cfg.get('backup_file'): should_run = False
+                    if src_cfg['type'] == 'backup_dir':
+                        if src_cfg.get('backup_mode', 'single') == 'single' and not src_cfg.get('backup_file'): should_run = False
+                        if src_cfg.get('backup_mode', 'single') == 'playlist' and not src_cfg.get('backup_playlist_name'): should_run = False
                     if src_cfg['type'] == 'stream' and not src_cfg['url']: should_run = False
                     if src_cfg['type'] == 'rtp' and not src_cfg['rtp_uri']: should_run = False
                     if src_cfg['type'] == 'device' and src_cfg.get('input_device') is None: should_run = False
@@ -901,7 +976,9 @@ class BroadcastEngine:
                            if s['type'] == 'stream' and s['url']: is_conf = True
                            elif s['type'] == 'rtp' and s['rtp_uri']: is_conf = True
                            elif s['type'] == 'file' and s['path']: is_conf = True
-                           elif s['type'] == 'backup_dir' and s.get('backup_file'): is_conf = True
+                           elif s['type'] == 'backup_dir':
+                               if s.get('backup_mode', 'single') == 'single' and s.get('backup_file'): is_conf = True
+                               elif s.get('backup_mode', 'single') == 'playlist' and s.get('backup_playlist_name'): is_conf = True
                            elif s['type'] == 'tone': is_conf = True
                            elif s['type'] == 'device' and s.get('input_device') is not None: is_conf = True
                         
@@ -1074,12 +1151,14 @@ def index():
                 new_uri = request.form.get(f'rtp_uri{i}', '')
                 new_path = request.form.get(f'path{i}', '')
                 new_backup_file = request.form.get(f'backup_file{i}', '')
+                new_backup_mode = request.form.get(f'backup_mode{i}', 'single')
+                new_playlist_name = request.form.get(f'backup_playlist_name{i}', '')
                 new_buffer = int(request.form.get(f'buffer_kb{i}', 1024))
                 new_in_dev = request.form.get(f'input_device{i}')
                 
                 src = CONFIG['sources'][i]
                 src['input_device'] = int(new_in_dev) if (new_in_dev and new_in_dev != 'None') else None
-                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src['buffer_kb'] != new_buffer):
+                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src['buffer_kb'] != new_buffer):
                     needs_restart = True
                 
                 src['type'] = new_type
@@ -1087,6 +1166,8 @@ def index():
                 src['rtp_uri'] = new_uri
                 src['path'] = new_path
                 src['backup_file'] = new_backup_file
+                src['backup_mode'] = new_backup_mode
+                src['backup_playlist_name'] = new_playlist_name
                 src['buffer_kb'] = new_buffer
                 
                 if new_type in ['file', 'backup_dir']:
@@ -1100,6 +1181,16 @@ def index():
                 src['meta_normalize'] = (request.form.get(f'meta_normalize{i}') == 'on')
                 src['meta_only_played'] = (request.form.get(f'meta_only_played{i}') == 'on')
                 src['meta_uppercase'] = (request.form.get(f'meta_uppercase{i}') == 'on')
+                src['meta_rtplus'] = (request.form.get(f'meta_rtplus{i}') == 'on')
+                src['meta_rtplus_format'] = request.form.get(f'meta_rtplus_format{i}', 'artist_title')
+                
+                # Separator management (listed or customized)
+                sep_val = request.form.get(f'meta_rtplus_separator{i}', ' - ')
+                if sep_val == 'custom':
+                    sep_val = request.form.get(f'meta_rtplus_custom_sep{i}', ' - ')
+                src['meta_rtplus_separator'] = sep_val
+                
+                src['meta_max_64'] = (request.form.get(f'meta_max_64{i}') == 'on')
                 src['alert_silent'] = (request.form.get(f'alert_silent{i}') == 'on')
                 src['alert_unreachable'] = (request.form.get(f'alert_unreachable{i}') == 'on')
                 
@@ -1165,6 +1256,15 @@ def delete_audio():
             add_internal_log(f"Audio file deleted: {filename}", "SYSTEM")
             return jsonify({'status': 'ok'})
     return jsonify({'status': 'error'})
+
+@app.route('/update_playlists', methods=['POST'])
+def update_playlists():
+    if not session.get('logged_in'): return jsonify({'status': 'error'})
+    if session.get('role') != 'admin' and not CONFIG['server'].get('op_backup_access'): return jsonify({'status': 'error'})
+    CONFIG['playlists'] = request.json.get('playlists', {})
+    save_config(CONFIG)
+    add_internal_log("Playlists updated.", "SYSTEM")
+    return jsonify({'status': 'ok'})
 
 @app.route('/api/audio_files')
 def api_audio_files():
@@ -1380,7 +1480,9 @@ def set_mode():
             if s['type'] == 'stream' and s['url']: is_conf = True
             elif s['type'] == 'rtp' and s['rtp_uri']: is_conf = True
             elif s['type'] == 'file' and s['path'] and os.path.exists(s['path']): is_conf = True
-            elif s['type'] == 'backup_dir' and s.get('backup_file') and os.path.exists(os.path.join(BACKUP_DIR, s['backup_file'])): is_conf = True
+            elif s['type'] == 'backup_dir':
+                if s.get('backup_mode', 'single') == 'single' and s.get('backup_file') and os.path.exists(os.path.join(BACKUP_DIR, s.get('backup_file'))): is_conf = True
+                elif s.get('backup_mode', 'single') == 'playlist' and s.get('backup_playlist_name'): is_conf = True
             elif s['type'] == 'tone': is_conf = True
             elif s['type'] == 'device' and s.get('input_device') is not None: is_conf = True
             
