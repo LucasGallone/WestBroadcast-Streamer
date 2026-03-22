@@ -425,36 +425,71 @@
 {% endif %}
 
 <div id="upload-modal" class="modal">
-    <div class="modal-box" style="width: 700px; max-width: 90%;">
-        <h2>Backup Audio Files</h2>
-        <form id="upload-form" style="margin-bottom: 20px; background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px dashed #ccc;">
-            <div style="display:flex; align-items:center; gap: 10px;">
-                <input type="file" name="file" id="upload-file-input" accept="audio/*" required style="margin: 0;">
-                <button type="button" onclick="uploadAudioFile()" class="modal-btn btn-blue" style="margin: 0; width: 150px; padding: 8px;">Upload File</button>
+    <div class="modal-box" style="width: 850px; max-width: 95%;">
+        <h2 style="margin-bottom: 15px;">Backup Audio Files & Playlists</h2>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; text-align: left;">
+            
+            <!-- SECTION FICHIERS -->
+            <div style="flex: 1; min-width: 320px;">
+                <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px; color:var(--blue); font-size:1.1rem;">1. Audio Files</h3>
+                <form id="upload-form" style="margin-bottom: 15px; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc;">
+                    <div style="display:flex; flex-direction:column; gap: 10px;">
+                        <input type="file" name="file" id="upload-file-input" accept="audio/*" required style="margin: 0; width:100%; box-sizing:border-box;">
+                        <button type="button" onclick="uploadAudioFile()" class="modal-btn btn-blue" style="margin: 0; padding: 8px;">Upload File</button>
+                    </div>
+                    <div id="upload-progress-container" style="display:none; margin-top: 10px; width: 100%; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                        <div id="upload-progress-bar" style="height: 10px; width: 0%; background: var(--success); transition: width 0.2s;"></div>
+                    </div>
+                    <div id="upload-status-text" style="margin-top: 5px; font-size: 0.85rem; font-weight: bold; color: var(--success); display: none;"></div>
+                </form>
+                <div style="height: 220px; overflow-y: auto; border: 1px solid #ccc; text-align: left; background:#fff;">
+                    <table class="logs-table">
+                        <thead><tr><th>Filename</th><th style="width:60px;">Action</th></tr></thead>
+                        <tbody id="audio-files-body">
+                            {% for af in audio_files %}
+                            <tr>
+                                <td>{{ af.name }}</td>
+                                <td><button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('{{ af.name }}')">Delete</button></td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="2" style="text-align: center; padding: 15px;">No files uploaded yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div id="upload-progress-container" style="display:none; margin-top: 15px; width: 100%; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
-                <div id="upload-progress-bar" style="height: 10px; width: 0%; background: var(--success); transition: width 0.2s;"></div>
+            
+            <!-- SECTION PLAYLISTS -->
+            <div style="flex: 1; min-width: 320px;">
+                <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px; color:var(--blue); font-size:1.1rem;">2. Playlists Manager</h3>
+                <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: calc(100% - 35px); box-sizing:border-box;">
+                    <div style="display:flex; gap:5px; margin-bottom:15px;">
+                        <select id="pm-select" onchange="pmSelectPlaylist()" style="flex:1; padding:6px; border:1px solid #ccc; border-radius:3px;">
+                            <option value="">-- Select Playlist to Edit --</option>
+                        </select>
+                        <button type="button" class="btn-sec" onclick="pmNewPlaylist()" style="color:black; border-color:#ccc; padding:6px 12px;">New</button>
+                        <button type="button" class="btn-sec" onclick="pmDeletePlaylist()" style="color:white; background:var(--danger); border-color:var(--danger); padding:6px 12px;">Delete</button>
+                    </div>
+                    
+                    <div id="pm-editor" style="display:none;">
+                        <div class="form-row"><label style="flex:0 0 50px;">Name:</label><input type="text" id="pm-name" style="padding:6px; border:1px solid #ccc; border-radius:3px;"></div>
+                        <div style="display:flex; gap:5px; margin-bottom:10px;">
+                            <select id="pm-add-file" style="flex:1; padding:6px; border:1px solid #ccc; border-radius:3px;">
+                                <option value="">-- Select a file to add --</option>
+                                {% for af in audio_files %}
+                                <option value="{{ af.name }}">{{ af.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn-sec" onclick="pmAddFile()" style="color:black; border-color:#ccc; padding:6px 12px;">Add</button>
+                        </div>
+                        <div id="pm-list" style="border:1px solid #ccc; background:#fff; height:130px; overflow-y:auto; margin-bottom:10px; border-radius:3px;"></div>
+                        <button type="button" class="modal-btn btn-blue" onclick="pmSavePlaylist()" style="margin:0; padding:8px;">Save Playlist</button>
+                    </div>
+                </div>
             </div>
-            <div id="upload-status-text" style="margin-top: 10px; font-size: 0.85rem; font-weight: bold; color: var(--success); display: none;"></div>
-        </form>
-        <div style="height: 300px; overflow-y: auto; border: 1px solid #ccc; text-align: left;">
-            <table class="logs-table">
-                <thead><tr><th>Filename</th><th>Action</th></tr></thead>
-                <tbody id="audio-files-body">
-                    {% for af in audio_files %}
-                    <tr>
-                        <td>{{ af.name }}</td>
-                        <td>
-                            <button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('{{ af.name }}')">Delete</button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="2" style="text-align: center; padding: 15px;">No files to display. The "backup-audio-files" directory is currently empty.</td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            
         </div>
-        <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('upload-modal').style.display='none'">Close</button>
+        <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('upload-modal').style.display='none'" style="margin-top: 20px;">Close Window</button>
     </div>
 </div>
 {% endif %}
@@ -607,14 +642,36 @@
                         </select>
                     </div>
                     <div class="form-row" id="row-path-{{i}}" style="display:none;"><label>Local File Path:</label><input type="text" name="path{{i}}" value="{{ cfg.sources[i].path or '' }}"></div>
-                    <div class="form-row" id="row-backup-dir-{{i}}" style="display:none;">
-                        <label>File:</label>
-                        <select name="backup_file{{i}}">
-                            <option value="">-- Select an uploaded file --</option>
-                            {% for af in audio_files %}
-                            <option value="{{ af.name }}" {% if cfg.sources[i].backup_file == af.name %}selected{% endif %}>{{ af.name }}</option>
-                            {% endfor %}
-                        </select>
+                    <div id="row-backup-dir-{{i}}" style="display:none; flex-direction:column; gap:5px;">
+                        <div class="form-row">
+                            <label>Mode:</label>
+                            <select name="backup_mode{{i}}" id="sel-backup-mode-{{i}}" onchange="toggleBackupMode('{{i}}')">
+                                <option value="single" {% if cfg.sources[i].backup_mode == 'single' %}selected{% endif %}>Single File (Loop)</option>
+                                <option value="playlist" {% if cfg.sources[i].backup_mode == 'playlist' %}selected{% endif %}>Playlist</option>
+                            </select>
+                        </div>
+                        
+                        <!-- SINGLE FILE MODE -->
+                        <div class="form-row" id="backup-single-{{i}}" {% if cfg.sources[i].backup_mode == 'playlist' %}style="display:none;"{% endif %}>
+                            <label>File:</label>
+                            <select name="backup_file{{i}}" id="sel-backup-file-{{i}}">
+                                <option value="">-- Select an uploaded file --</option>
+                                {% for af in audio_files %}
+                                <option value="{{ af.name }}" {% if cfg.sources[i].backup_file == af.name %}selected{% endif %}>{{ af.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- PLAYLIST MODE -->
+                        <div class="form-row" id="backup-playlist-{{i}}" {% if cfg.sources[i].backup_mode != 'playlist' %}style="display:none;"{% endif %}>
+                            <label>Playlist:</label>
+                            <select name="backup_playlist_name{{i}}" id="sel-backup-playlist-{{i}}">
+                                <option value="">-- Select a playlist --</option>
+                                {% for pname in cfg.playlists.keys() %}
+                                <option value="{{ pname }}" {% if cfg.sources[i].backup_playlist_name == pname %}selected{% endif %}>{{ pname }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                     <div class="form-row"><label>Input Gain (dB):</label><input type="number" step="0.1" name="gain{{i}}" value="{{ cfg.sources[i].gain }}"></div>
                     <div class="form-row" id="row-buffer-{{i}}"><label>Buffer Size (KB):</label><input type="number" step="1" min="64" name="buffer_kb{{i}}" value="{{ cfg.sources[i].buffer_kb }}"></div>
@@ -655,6 +712,40 @@
                             <div class="form-row">
                                 <label style="flex:0 0 280px;">Convert all letters to uppercase:</label>
                                 <input type="checkbox" name="meta_uppercase{{i}}" {{ 'checked' if cfg.sources[i].meta_uppercase else '' }}>
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 280px;">Limit to 64 characters for Radiotext (RDS):</label>
+                                <input type="checkbox" name="meta_max_64{{i}}" {{ 'checked' if cfg.sources[i].meta_max_64 else '' }}>
+                            </div>
+                            <div class="form-row">
+                               <label style="flex:0 0 280px;">Radiotext+ tags for Stereo Tool (Artist/Title):</label>
+                                <input type="checkbox" name="meta_rtplus{{i}}" onclick="toggleRTPlus('{{i}}', this)" {{ 'checked' if cfg.sources[i].meta_rtplus else '' }}>
+                            </div>
+                           <div id="meta-rtplus-options-{{i}}" {% if not cfg.sources[i].meta_rtplus %}style="display:none;"{% endif %}>
+                                <div class="form-row">
+                                    <label style="flex:0 0 280px;">Format used by source metadata:</label>
+                                    <select name="meta_rtplus_format{{i}}" style="flex: 1;">
+                                        <option value="artist_title" {% if cfg.sources[i].meta_rtplus_format == 'artist_title' %}selected{% endif %}>Artist - Title</option>
+                                        <option value="title_artist" {% if cfg.sources[i].meta_rtplus_format == 'title_artist' %}selected{% endif %}>Title - Artist</option>
+                                    </select>
+                                </div>
+                                <div class="form-row">
+                                    <label style="flex:0 0 280px;">Separator used between artist and title:</label>
+                                    <div style="flex: 1; display: flex; flex-direction: column; gap: 5px;">
+                                        <select name="meta_rtplus_separator{{i}}" id="sel-sep-{{i}}" onchange="toggleCustomSep('{{i}}')" style="width: 100%;">
+                                            <option value=" - " {% if cfg.sources[i].meta_rtplus_separator == ' - ' %}selected{% endif %}>-</option>
+                                            <option value=" / " {% if cfg.sources[i].meta_rtplus_separator == ' / ' %}selected{% endif %}>/</option>
+                                            <option value=" : " {% if cfg.sources[i].meta_rtplus_separator == ' : ' %}selected{% endif %}>:</option>
+                                            <option value=" > " {% if cfg.sources[i].meta_rtplus_separator == ' > ' %}selected{% endif %}>></option>
+                                            <option value="custom" {% if cfg.sources[i].meta_rtplus_separator not in [' - ', ' / ', ' : ', ' > '] %}selected{% endif %}>Custom...</option>
+                                        </select>
+                                        {% if cfg.sources[i].meta_rtplus_separator in [' - ', ' / ', ' : ', ' > '] %}
+                                        <input type="text" name="meta_rtplus_custom_sep{{i}}" id="custom-sep-{{i}}" value="" placeholder="Indicate it here." style="width: 100%; display: none; box-sizing: border-box;">
+                                        {% else %}
+                                        <input type="text" name="meta_rtplus_custom_sep{{i}}" id="custom-sep-{{i}}" value="{{ cfg.sources[i].meta_rtplus_separator }}" placeholder="Indicate it here." style="width: 100%; display: block; box-sizing: border-box;">
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -738,7 +829,7 @@
             <div class="modal-section" style="border-top:none; margin-top:0; padding-top:0;">
                 <h3>Output Processing</h3>
                 <div class="form-row">
-                    <label style="flex:0 0 250px;">FM Tilt Correction (EXPERIMENTAL!):</label>
+                    <label style="flex:0 0 250px;">FM Tilt Correction (Experimental):</label>
                     <input type="checkbox" name="fm_tilt" {% if cfg.fm.tilt %}checked{% endif %}>
                 </div>
             </div>
@@ -781,10 +872,12 @@
 {% if not login_needed or not cfg.server.hide_bg_on_login %}
 <script>
     var socket = io();
+</script>
 
+    {% if not login_needed %}
+    <script>
     // Global variable for current log page
     var currentLogPage = 1;
-
     function confirmRestart() { if(confirm("Are you sure you want to restart the decoder?\n\nThis will interrupt all audio inputs and the output for a very short time.")) window.location.href = "/sys_restart"; }
     function confirmRestore() { if(confirm("Are you sure you want to RESTORE the decoder to factory settings?\n\nThis operation will DELETE your current configuration and cannot be undone!")) window.location.href = "/sys_restore"; }
 
@@ -839,10 +932,135 @@
         document.getElementById('meta-options-' + idx).style.display = chk.checked ? 'block' : 'none';
     }
 
+    function toggleRTPlus(idx, chk) {
+        document.getElementById('meta-rtplus-options-' + idx).style.display = chk.checked ? 'block' : 'none';
+    }
+
+    function toggleCustomSep(idx) {
+        let val = document.getElementById('sel-sep-' + idx).value;
+        document.getElementById('custom-sep-' + idx).style.display = (val === 'custom') ? 'block' : 'none';
+    }
+
    function openLogs() {
         document.getElementById('logs-modal').style.display='flex';
         currentLogPage = 1;
         loadLogs();
+    }
+
+    function toggleBackupMode(idx) {
+        let val = document.getElementById('sel-backup-mode-' + idx).value;
+        document.getElementById('backup-single-' + idx).style.display = (val === 'single') ? 'flex' : 'none';
+        document.getElementById('backup-playlist-' + idx).style.display = (val === 'playlist') ? 'flex' : 'none';
+    }
+
+    let globalPlaylists = JSON.parse('{{ cfg.playlists | tojson | safe }}');
+    let pmCurrentEdit = null;
+    let pmCurrentFiles = [];
+
+    function pmUpdateSelects() {
+        let sel = document.getElementById('pm-select');
+        let curSel = sel.value;
+        sel.innerHTML = '<option value="">-- Select Playlist to Edit --</option>';
+        for(let p in globalPlaylists) {
+            let opt = document.createElement('option');
+            opt.value = p; opt.innerText = p;
+            if(p === curSel) opt.selected = true;
+            sel.appendChild(opt);
+        }
+        
+        for(let i=0; i<3; i++) {
+            let srcSel = document.getElementById('sel-backup-playlist-' + i);
+            if(srcSel) {
+                let cur = srcSel.value;
+                srcSel.innerHTML = '<option value="">-- Select a playlist --</option>';
+                for(let p in globalPlaylists) {
+                    let opt = document.createElement('option');
+                    opt.value = p; opt.innerText = p;
+                    if(p === cur) opt.selected = true;
+                    srcSel.appendChild(opt);
+                }
+            }
+        }
+    }
+
+    function pmSelectPlaylist() {
+        let val = document.getElementById('pm-select').value;
+        if(!val) { document.getElementById('pm-editor').style.display='none'; return; }
+        pmCurrentEdit = val;
+        document.getElementById('pm-name').value = val;
+        pmCurrentFiles = [...globalPlaylists[val]];
+        document.getElementById('pm-editor').style.display='block';
+        pmRenderList();
+    }
+
+    function pmNewPlaylist() {
+        pmCurrentEdit = "";
+        document.getElementById('pm-select').value = "";
+        document.getElementById('pm-name').value = "New Playlist";
+        pmCurrentFiles = [];
+        document.getElementById('pm-editor').style.display='block';
+        pmRenderList();
+    }
+
+    function pmDeletePlaylist() {
+        let val = document.getElementById('pm-select').value;
+        if(!val) return;
+        if(confirm("Are you sure you want to delete the '" + val + "' playlist?")) {
+            delete globalPlaylists[val];
+            pmSaveToServer();
+            document.getElementById('pm-editor').style.display='none';
+            document.getElementById('pm-select').value = "";
+        }
+    }
+
+    function pmAddFile() {
+        let f = document.getElementById('pm-add-file').value;
+        if(f) { pmCurrentFiles.push(f); pmRenderList(); }
+    }
+
+    function pmRemoveFile(idx) { pmCurrentFiles.splice(idx, 1); pmRenderList(); }
+    function pmMoveFile(idx, dir) {
+        let t = pmCurrentFiles[idx];
+        pmCurrentFiles[idx] = pmCurrentFiles[idx+dir];
+        pmCurrentFiles[idx+dir] = t;
+        pmRenderList();
+    }
+
+    function pmRenderList() {
+        let html = '';
+        pmCurrentFiles.forEach((f, i) => {
+            html += `<div style="display:flex; justify-content:space-between; padding:6px; border-bottom:1px solid #eee; font-size:0.85rem;">
+                <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f}</span>
+                <div style="display:flex; gap:2px;">
+                    <button type="button" class="btn-sec" style="padding:2px 6px;" onclick="pmMoveFile(${i},-1)" ${i===0?'disabled':''}>&#9650;</button>
+                    <button type="button" class="btn-sec" style="padding:2px 6px;" onclick="pmMoveFile(${i},1)" ${i===pmCurrentFiles.length-1?'disabled':''}>&#9660;</button>
+                    <button type="button" class="btn-sec" style="padding:2px 6px; color:red; font-weight:bold;" onclick="pmRemoveFile(${i})">&times;</button>
+                </div>
+            </div>`;
+        });
+        document.getElementById('pm-list').innerHTML = html || '<div style="color:#888; text-align:center; padding:20px;">Empty</div>';
+    }
+
+    function pmSavePlaylist() {
+        let newName = document.getElementById('pm-name').value.trim();
+        if(!newName) { alert("Name required"); return; }
+        if(pmCurrentEdit && pmCurrentEdit !== newName) {
+            delete globalPlaylists[pmCurrentEdit];
+        }
+        globalPlaylists[newName] = pmCurrentFiles;
+        pmSaveToServer();
+        pmCurrentEdit = newName;
+        document.getElementById('pm-select').value = newName;
+    }
+
+    function pmSaveToServer() {
+        fetch('/update_playlists', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({playlists: globalPlaylists})
+        }).then(r => r.json()).then(d => {
+            pmUpdateSelects();
+        });
     }
 
     function clearLogs() {
@@ -873,18 +1091,29 @@
             });
             
             for(let i=0; i<3; i++) {
-                let select = document.querySelector(`select[name="backup_file${i}"]`);
-                if(select) {
-                    let currentVal = select.value;
-                    select.innerHTML = '<option value="">-- Select an uploaded file --</option>';
+                let selectFile = document.getElementById(`sel-backup-file-${i}`);
+                if(selectFile) {
+                    let currentVal = selectFile.value;
+                    selectFile.innerHTML = '<option value="">-- Select an uploaded file --</option>';
                     data.forEach(af => {
                         let opt = document.createElement('option');
                         opt.value = af.name;
                         opt.innerText = af.name;
                         if(af.name === currentVal) opt.selected = true;
-                        select.appendChild(opt);
+                        selectFile.appendChild(opt);
                     });
                 }
+            }
+            let pmAdd = document.getElementById('pm-add-file');
+            if(pmAdd) {
+                let cur = pmAdd.value;
+                pmAdd.innerHTML = '<option value="">-- Select a file to add --</option>';
+                data.forEach(af => {
+                    let opt = document.createElement('option');
+                    opt.value = af.name; opt.innerText = af.name;
+                    if(af.name === cur) opt.selected = true;
+                    pmAdd.appendChild(opt);
+                });
             }
         });
     }
@@ -988,7 +1217,13 @@
     }
 
     window.onload = function() {
-        for(let i=0; i<3; i++) { if(document.getElementById('sel-type-' + i)) toggleType(i); }
+        pmUpdateSelects();
+        for(let i=0; i<3; i++) { 
+            if(document.getElementById('sel-type-' + i)) {
+                toggleType(i); 
+                if(document.getElementById('sel-backup-mode-' + i)) toggleBackupMode(i);
+            }
+        }
         // Close menu on click outside
         window.onclick = function(event) {
             if (!event.target.matches('.menu-btn')) {
@@ -1002,7 +1237,10 @@
             }
         }
     };
+    </script>
+    {% endif %}
 
+    <script>
     const scalePoints = [0, -3, -6, -10, -15, -20, -25, -30, -40, -50, -60];
     const percentPoints = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0];
 
@@ -1085,6 +1323,7 @@
         np.innerText = data.now_playing ? data.now_playing : "Now playing: ...";
     });
 </script>
+{% if not login_needed %}
 <div id="analysis-modal" class="modal">
     <div class="modal-box" style="width: 90%; max-width: 1200px;">
         <h2>Output Audio Analysis (CPU load increased on the host machine when active)</h2>
@@ -1599,6 +1838,7 @@
         draw();
     }
 </script>
+{% endif %}
 {% endif %}
 </body>
 </html>
