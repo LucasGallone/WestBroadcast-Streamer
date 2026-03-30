@@ -1658,7 +1658,6 @@ def start_gui():
     tk.Label(root, text="KEEP THIS WINDOW OPEN FOR THE AUDIO OUTPUT!", fg="red", font=("Segoe UI", 10, "bold")).pack(pady=(0, 5))
     tk.Label(root, text=f"IP: {ip}", fg="#333", font=("Segoe UI", 10)).pack(pady=2)
     tk.Button(root, text="CLICK HERE TO OPEN THE WEBSERVER INTERFACE\n(Default credentials: admin/admin)", bg="#3c8dbc", fg="white", font=("Segoe UI", 9, "bold"), command=lambda: webbrowser.open(f"http://localhost:{port}")).pack(pady=10)
-    tk.Label(root, text="Default credentials: admin / admin", fg="black", font=("Segoe UI", 8)).pack(pady=5)
     
     root.mainloop()
 
