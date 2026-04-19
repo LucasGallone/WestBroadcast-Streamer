@@ -11,16 +11,15 @@ The decoder is configured and monitored via a secure web interface.
 <br>
 <br>
 WestBroadcast Streamer runs as a portable installer. This means you can use it anywhere, even from an external hard drive or a USB drive. 
-<br>
-<br>
-<b>IMPORTANT NOTE: At this time, the decoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
+- - -
+<b>⚠️ At this time, the decoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
 <br>
 <br>
 This software has been tested on several computers running Windows 10 and 11, with success.
 <br>
 Any quality feedback regarding other operating systems is welcome!
-<br>
-<br>
+
+
 ![wbcast-streamer-1](https://github.com/user-attachments/assets/2e544432-b65b-4c47-a677-1f6f809fbac9)
 ![interface-readme-2](https://github.com/user-attachments/assets/732b4156-a544-4d11-8df0-16429662a0f5)
 ## What this tool offers
@@ -98,6 +97,7 @@ If not, feel free to open an "issue" with as much detail as possible.
 This project is licensed under the GNU General Public License (GPL) v3.0.
 <br>
 Please refer to the `LICENSE` file for more details.
+- - -
 ### FFmpeg and FFprobe
 This project uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
 <br>
@@ -112,6 +112,7 @@ This project uses the FFmpeg and FFprobe libraries and executables for processin
 <br>
 <br>
 For more details, please refer to the `FFmpeg-LICENSE.txt` file included in this repository.
+- - -
 ### Socket.io (JavaScript Client)
 The socket.io.js file included in the /static folder is part of the Socket.io library.
 <br>
@@ -119,6 +120,7 @@ The socket.io.js file included in the /static folder is part of the Socket.io li
 License: MIT License.
 <br>
 Copyright (c) 2014-2025 Automattic.
+- - -
 ### Python Dependencies
 This project uses the following libraries, automatically installed by the Launcher script:
 <br>
