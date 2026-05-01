@@ -17,7 +17,7 @@ WestBroadcast Streamer runs as a portable installer. This means you can use it a
 <br>
 This software has been tested on several computers running Windows 10 and 11, with success.
 <br>
-Any quality feedback regarding other operating systems is welcome!
+Any feedback regarding other operating systems is welcome!
 
 
 ![wbcast-streamer-1](https://github.com/user-attachments/assets/2e544432-b65b-4c47-a677-1f6f809fbac9)
