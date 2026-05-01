@@ -47,7 +47,7 @@ Any feedback regarding other operating systems is welcome!
 • The ability to analyze the audio output in various ways, view system/authentication logs, and much more...
 <br>
 <br>
-For further details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
+👉 For further details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
 ## 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/archive/refs/heads/main.zip)
 <br>
