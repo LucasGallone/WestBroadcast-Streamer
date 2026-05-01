@@ -12,7 +12,7 @@ The decoder is configured and monitored via a secure web interface.
 <br>
 WestBroadcast Streamer runs as a portable installer. This means you can use it anywhere, even from an external hard drive or a USB drive. 
 - - -
-<b>⚠️ At this time, the decoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
+<b>⚠️ For now, the decoder only works on Windows. Optimizations are needed so that the project can run on Linux.</b>
 <br>
 <br>
 This software has been tested on several computers running Windows 10 and 11, with success.
