@@ -237,6 +237,9 @@
         {% if login_error %}
         <div style="color: red; margin-bottom: 15px; font-weight: bold;">Access denied: Invalid credentials.</div>
         {% endif %}
+        {% if login_lockout %}
+        <div style="color: red; margin-bottom: 15px; font-weight: bold; font-size: 0.95rem;">Too many failed login attempts.<br>For security reasons, you must wait 90 seconds before trying again.</div>
+        {% endif %}
         <form action="/login" method="POST">
             <input type="text" name="username" placeholder="Username" required>
             <input type="password" name="password" placeholder="Password" required>
@@ -269,12 +272,24 @@
                     <label style="flex:none; width:auto; padding-right: 0;">-> Peak Hold Time (seconds):</label>
                     <input type="number" name="peak_time" value="{{ cfg.server.peak_hold_time }}" min="1" max="60" style="width: 50px; flex:none; margin-left: 5px;">
                 </div>
+                <div class="form-row" style="justify-content: flex-start; gap: 10px; margin-top: 10px;">
+                    <input type="checkbox" name="monitor_cpu" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.monitor_cpu_ram %}checked{% endif %}>
+                    <label style="flex:none; width:auto;">Enable CPU / RAM monitoring on the host machine</label>
+                </div>
             </div>
 
             <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: left; border: 1px solid #ddd;">
                 <h3 style="margin-top:0; font-size:1rem; color:var(--blue); border-bottom:1px solid #ddd; padding-bottom:5px;">Administrator Account</h3>
                 <div class="form-row"><label style="flex:0 0 200px;">Username:</label><input type="text" name="srv_user" value="{{ cfg.server.user }}" required></div>
-                <div class="form-row"><label style="flex:0 0 200px;">Password:</label><input type="text" name="srv_pass" value="{{ cfg.server.password }}" required></div>
+                <div class="form-row">
+                    <label style="flex:0 0 200px;">Password:</label>
+                    <div style="position: relative; flex: 1; display: flex;">
+                        <input type="password" name="srv_pass" id="srv_pass_input" value="{{ cfg.server.password }}" required style="padding-right: 30px;">
+                        <span onclick="togglePassword('srv_pass_input', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; display: flex; align-items: center;">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </span>
+                    </div>
+                </div>
             </div>
 
             <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: left; border: 1px solid #ddd;">
@@ -286,7 +301,15 @@
                     </div>
                 </div>
                 <div class="form-row"><label style="flex:0 0 200px;">Username:</label><input type="text" name="op_user" value="{{ cfg.server.op_user }}"></div>
-                <div class="form-row"><label style="flex:0 0 200px;">Password:</label><input type="text" name="op_pass" value="{{ cfg.server.op_pass }}"></div>
+                <div class="form-row">
+                    <label style="flex:0 0 200px;">Password:</label>
+                    <div style="position: relative; flex: 1; display: flex;">
+                        <input type="password" name="op_pass" id="op_pass_input" value="{{ cfg.server.op_pass }}" style="padding-right: 30px;">
+                        <span onclick="togglePassword('op_pass_input', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; display: flex; align-items: center;">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </span>
+                    </div>
+                </div>
                 
                 <div style="margin-top:15px; padding-top:10px; border-top:1px dashed #ccc;">
                     <div style="font-weight:bold; font-size:0.85rem; margin-bottom:10px; color:#555;">By default, the operator account only has rights to modify the sources, without being able to modify the alert emails rules. Access to all "sensitive" sections is also disabled.<br><br>If needed, you can enable access to some of these sections by checking the corresponding boxes below.</div>
@@ -429,7 +452,7 @@
         <h2 style="margin-bottom: 15px;">Backup Audio Files & Playlists Manager</h2>
         <div style="display: flex; gap: 20px; flex-wrap: wrap; text-align: left;">
             
-            <!-- SECTION FICHIERS -->
+            <!-- FILES SECTION -->
             <div style="flex: 1; min-width: 320px;">
                 <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px; color:var(--blue); font-size:1.1rem;">Audio Files</h3>
                 <form id="upload-form" style="margin-bottom: 15px; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc;">
@@ -459,7 +482,7 @@
                 </div>
             </div>
             
-            <!-- SECTION PLAYLISTS -->
+            <!-- PLAYLISTS SECTION -->
             <div style="flex: 1; min-width: 320px;">
                 <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px; color:var(--blue); font-size:1.1rem;">Playlists</h3>
                 <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: calc(100% - 35px); box-sizing:border-box;">
@@ -504,7 +527,13 @@
         {% endif %}
     </div>
     <div class="header-btns">
-        <span id="uptime-txt" style="margin-right:15px; font-weight:bold; align-self:center;">Uptime: ...</span>
+        <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-right: 15px; gap: 3px;">
+            <span id="uptime-txt" style="font-weight:bold;">Uptime: ...</span>
+            <div id="sys-metrics" style="display: none; gap: 8px; font-size: 0.75rem; font-weight: 600;">
+                <div style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.3);"><span style="opacity:0.8;">CPU:</span> <span id="cpu-txt">--%</span></div>
+                <div style="background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.3);"><span style="opacity:0.8;">RAM:</span> <span id="ram-txt">--%</span></div>
+            </div>
+        </div>
         
         {% if not login_needed %}
         <div style="position:relative;">
@@ -614,6 +643,44 @@
 
     {% if not login_needed %}
     <form method="POST" id="mainForm">
+        
+        {% for i in range(3) %}
+        <div id="tcp-modal-{{i}}" class="modal">
+            <div class="modal-box" style="width: 500px;">
+                <h2>ASCII over TCP Output - {{ cfg.sources[i].name }}</h2>
+                <p style="font-size: 0.85rem; color: #555; text-align: left; margin-bottom: 15px;">Send the "Currently Playing" metadata in ASCII format over TCP connection to an RDS encoder.</p>
+                
+                <div class="form-row">
+                    <label style="flex: 0 0 150px;">Target IP Address:</label>
+                    <input type="text" name="meta_tcp_ip{{i}}" value="{{ cfg.sources[i].meta_tcp_ip }}" style="margin: 0;">
+                </div>
+                
+                <div class="form-row">
+                    <label style="flex: 0 0 150px;">Target Port:</label>
+                    <input type="number" name="meta_tcp_port{{i}}" value="{{ cfg.sources[i].meta_tcp_port }}" style="margin: 0;">
+                </div>
+                
+                <div class="form-row">
+                    <label style="flex: 0 0 150px;">Prefix Format:</label>
+                    <select name="meta_tcp_prefix_mode{{i}}" onchange="toggleTcpPrefix('{{i}}')" id="sel-tcp-prefix-{{i}}" style="margin: 0;">
+                        <option value="pira" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira' %}selected{% endif %}>PIRA (RT=)</option>
+                        <option value="audemat1" {% if cfg.sources[i].meta_tcp_prefix_mode == 'audemat1' %}selected{% endif %}>Audemat (TEXT=)</option>
+                        <option value="audemat2" {% if cfg.sources[i].meta_tcp_prefix_mode == 'audemat2' %}selected{% endif %}>Audemat (RT_TEXT=)</option>
+                        <option value="stereotool" {% if cfg.sources[i].meta_tcp_prefix_mode == 'stereotool' %}selected{% endif %}>Stereo Tool (THIMEORT=)</option>
+                        <option value="custom" {% if cfg.sources[i].meta_tcp_prefix_mode == 'custom' %}selected{% endif %}>Custom...</option>
+                    </select>
+                </div>
+                
+                <div class="form-row" id="row-tcp-custom-{{i}}" {% if cfg.sources[i].meta_tcp_prefix_mode != 'custom' %}style="display:none;"{% endif %}>
+                    <label style="flex: 0 0 150px;">Custom Prefix:</label>
+                    <input type="text" name="meta_tcp_custom_prefix{{i}}" value="{{ cfg.sources[i].meta_tcp_custom_prefix }}" style="margin: 0;">
+                </div>
+                
+                <button type="button" class="modal-btn btn-blue" onclick="document.getElementById('tcp-modal-{{i}}').style.display='none'" style="margin-top: 20px;">Done (Will be applied upon saving)</button>
+            </div>
+        </div>
+        {% endfor %}
+
         <div class="settings-grid">
             {% for i in range(3) %}
             <div class="source-col">
@@ -623,7 +690,8 @@
                         <label>Type:</label>
                         <select name="type{{i}}" onchange="toggleType('{{i}}')" id="sel-type-{{i}}">
                             <option value="stream" {% if cfg.sources[i].type == 'stream' %}selected{% endif %}>IP Stream (HTTP / HTTPS)</option>
-                            <option value="rtp" {% if cfg.sources[i].type == 'rtp' %}selected{% endif %}>RTP Stream</option>
+                            <option value="rtp_mpegts" {% if cfg.sources[i].type == 'rtp_mpegts' %}selected{% endif %}>RTP Stream (Via MPEG-TS)</option>
+                            <option value="rtp_sdp" {% if cfg.sources[i].type == 'rtp_sdp' %}selected{% endif %}>RTP Stream (Via SDP File)</option>
                             <option value="device" {% if cfg.sources[i].type == 'device' %}selected{% endif %}>Audio Input Device</option>
                             <option value="file" {% if cfg.sources[i].type == 'file' %}selected{% endif %}>Local File</option>
                             <option value="backup_dir" {% if cfg.sources[i].type == 'backup_dir' %}selected{% endif %}>Backup Audio Directory</option>
@@ -631,17 +699,25 @@
                         </select>
                     </div>
                     <div class="form-row" id="row-url-{{i}}"><label>URL:</label><input type="text" name="url{{i}}" value="{{ cfg.sources[i].url }}"></div>
-                    <div class="form-row" id="row-rtp-{{i}}" style="display:none;"><label>URI:</label><input type="text" name="rtp_uri{{i}}" value="{{ cfg.sources[i].rtp_uri }}"></div>
+                    <div class="form-row" id="row-rtp-{{i}}" style="display:none;"><label>URI (e.g. udp://@:5004):</label><input type="text" name="rtp_uri{{i}}" value="{{ cfg.sources[i].rtp_uri }}"></div>
                     <div class="form-row" id="row-device-{{i}}" style="display:none;">
                         <label>Device:</label>
                         <select name="input_device{{i}}">
-                            <option value="None">-- Select Input --</option>
+                            <option value="None">-- Select Device --</option>
                             {% for dev in in_devices %}
                             <option value="{{ dev.id }}" {% if cfg.sources[i].input_device == dev.id %}selected{% endif %}>{{ dev.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-row" id="row-path-{{i}}" style="display:none;"><label>Local File Path:</label><input type="text" name="path{{i}}" value="{{ cfg.sources[i].path or '' }}"></div>
+                    <div class="form-row" id="row-path-{{i}}" style="display:none;">
+                        <label>Local File Path:</label>
+                        <div style="flex: 1; display: flex; gap: 5px; min-width: 0;">
+                            <input type="text" name="path{{i}}" id="path-input-{{i}}" value="{{ cfg.sources[i].path or '' }}" style="flex: 1; min-width: 0; margin: 0;">
+                            <button type="button" class="btn-sec" onclick="browseFile('{{i}}')" style="color: #333; border-color: #ccc; padding: 4px 10px; display: flex; align-items: center; justify-content: center; background: #eee;" title="Browse for a file...">
+                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
                     <div id="row-backup-dir-{{i}}" style="display:none; flex-direction:column; gap:5px;">
                         <div class="form-row">
                             <label>Mode:</label>
@@ -693,14 +769,27 @@
 
                     <div id="meta-wrapper-{{i}}" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
                         <div class="form-row">
-                            <label style="flex: 0 0 280px;">Export "Currently Playing" info to text file:</label>
+                            <label style="flex: 0 0 280px;">Enable "Currently Playing" Metadata Export:</label>
                             <input type="checkbox" name="meta_enabled{{i}}" onclick="toggleMeta('{{i}}', this)" {{ 'checked' if cfg.sources[i].meta_enabled else '' }}>
                         </div>
                         <div id="meta-options-{{i}}" {% if not cfg.sources[i].meta_enabled %}style="display:none;"{% endif %}>
                             <div class="form-row">
+                                <label style="flex:0 0 250px;">Export Method:</label>
+                                <select name="meta_export_method{{i}}" id="sel-meta-method-{{i}}" onchange="toggleMetaMethod('{{i}}')" style="flex: 1; min-width: 0;">
+                                    <option value="file" {% if cfg.sources[i].meta_export_method == 'file' or not cfg.sources[i].meta_export_method %}selected{% endif %}>Local Text File</option>
+                                    <option value="tcp" {% if cfg.sources[i].meta_export_method == 'tcp' %}selected{% endif %}>Raw ASCII over TCP</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-row" id="row-meta-path-{{i}}" {% if cfg.sources[i].meta_export_method == 'tcp' %}style="display:none;"{% endif %}>
                                <label>Export path:</label>
                                 <input type="text" name="meta_path{{i}}" value="{{ cfg.sources[i].meta_path }}">
                             </div>
+                            
+                            <div id="row-meta-tcp-{{i}}" {% if cfg.sources[i].meta_export_method != 'tcp' %}style="margin-top: 10px; margin-bottom: 25px; display: none;"{% else %}style="margin-top: 10px; margin-bottom: 25px;"{% endif %}>
+                                <button type="button" class="btn-sec" onclick="document.getElementById('tcp-modal-{{i}}').style.display='flex'" style="color: black; border-color: #ccc; width: 100%;">Configure ASCII over TCP Output...</button>
+                            </div>
+
                             <div class="form-row">
                                 <label style="flex:0 0 280px;">Export only when played:</label>
                                 <input type="checkbox" name="meta_only_played{{i}}" {{ 'checked' if cfg.sources[i].meta_only_played else '' }}>
@@ -875,9 +964,25 @@
 </script>
 
     {% if not login_needed %}
-    <script>
+
+<script>
     // Global variable for current log page
     var currentLogPage = 1;
+    
+    function togglePassword(inputId, iconElem) {
+        let input = document.getElementById(inputId);
+        const eyeOpen = '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+        const eyeClosed = '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+        
+        if (input.type === "password") {
+            input.type = "text";
+            iconElem.innerHTML = eyeClosed;
+        } else {
+            input.type = "password";
+            iconElem.innerHTML = eyeOpen;
+        }
+    }
+
     function confirmRestart() { if(confirm("Are you sure you want to restart the decoder?\n\nThis will interrupt all audio inputs and the output for a very short time.")) window.location.href = "/sys_restart"; }
     function confirmRestore() { if(confirm("Are you sure you want to RESTORE the decoder to factory settings?\n\nThis operation will DELETE your current configuration and cannot be undone!")) window.location.href = "/sys_restore"; }
 
@@ -911,8 +1016,10 @@
         if(val === 'stream') {
             document.getElementById('row-url-' + idx).style.display = 'flex';
             document.getElementById('meta-wrapper-' + idx).style.display = 'block';
-        } else if (val === 'rtp') {
+        } else if (val === 'rtp_mpegts') {
             document.getElementById('row-rtp-' + idx).style.display = 'flex';
+        } else if (val === 'rtp_sdp') {
+            document.getElementById('row-path-' + idx).style.display = 'flex';
         } else if (val === 'device') {
             document.getElementById('row-device-' + idx).style.display = 'flex';
             document.getElementById('row-buffer-' + idx).style.display = 'none';
@@ -928,8 +1035,19 @@
         }
     }
 
+    function toggleTcpPrefix(idx) {
+        let val = document.getElementById('sel-tcp-prefix-' + idx).value;
+        document.getElementById('row-tcp-custom-' + idx).style.display = (val === 'custom') ? 'flex' : 'none';
+    }
+
     function toggleMeta(idx, chk) {
         document.getElementById('meta-options-' + idx).style.display = chk.checked ? 'block' : 'none';
+    }
+
+    function toggleMetaMethod(idx) {
+        let val = document.getElementById('sel-meta-method-' + idx).value;
+        document.getElementById('row-meta-path-' + idx).style.display = (val === 'file') ? 'flex' : 'none';
+        document.getElementById('row-meta-tcp-' + idx).style.display = (val === 'tcp') ? 'block' : 'none';
     }
 
     function toggleRTPlus(idx, chk) {
@@ -1061,6 +1179,17 @@
         }).then(r => r.json()).then(d => {
             pmUpdateSelects();
         });
+    }
+
+    function browseFile(idx) {
+        fetch('/browse_file')
+        .then(response => response.json())
+        .then(data => {
+            if (data.path && data.path !== "") {
+                document.getElementById('path-input-' + idx).value = data.path;
+            }
+        })
+        .catch(err => console.error(err));
     }
 
     function clearLogs() {
@@ -1222,8 +1351,10 @@
             if(document.getElementById('sel-type-' + i)) {
                 toggleType(i); 
                 if(document.getElementById('sel-backup-mode-' + i)) toggleBackupMode(i);
+                if(document.getElementById('sel-meta-method-' + i)) toggleMetaMethod(i);
             }
         }
+        
         // Close menu on click outside
         window.onclick = function(event) {
             if (!event.target.matches('.menu-btn')) {
@@ -1302,6 +1433,16 @@
 
     socket.on('status_update', function(data) {
         document.getElementById('uptime-txt').innerText = "Uptime: " + data.uptime;
+        
+        let sysMetrics = document.getElementById('sys-metrics');
+        if (data.cpu !== null && data.ram !== null && data.cpu !== undefined) {
+            sysMetrics.style.display = 'flex';
+            document.getElementById('cpu-txt').innerText = data.cpu.toFixed(1) + "%";
+            document.getElementById('ram-txt').innerText = data.ram.toFixed(1) + "%";
+        } else {
+            sysMetrics.style.display = 'none';
+        }
+        
         for(let i=0; i<3; i++) {
             let active = (data.active_idx === i);
             document.getElementById('grp-'+i).classList.toggle('active', active);
