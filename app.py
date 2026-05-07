@@ -24,11 +24,17 @@ from flask_socketio import SocketIO
 import logging
 from datetime import datetime, timedelta
 
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
 # --- 1. CONFIGURATION & LOGGING ---
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s', datefmt='%d/%m/%Y - %H:%M')
 
 CONFIG_FILE = 'config.json'
 SAMPLE_RATE = 48000
@@ -39,7 +45,7 @@ BACKUP_DIR = 'backup-audio-files'
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 DEFAULT_CONFIG = {
-    'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3},
+    'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
         {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-main.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
@@ -84,7 +90,7 @@ def load_config():
             if 'instance_name' not in cfg['server']: cfg['server']['instance_name'] = ''
             
             # Operator account
-            for key in['op_user', 'op_pass', 'op_enabled', 'op_audio_access', 'op_fm_access', 'op_allow_restart', 'op_backup_access', 'hide_bg_on_login', 'peak_hold_enabled', 'peak_hold_time']:
+            for key in['op_user', 'op_pass', 'op_enabled', 'op_audio_access', 'op_fm_access', 'op_allow_restart', 'op_backup_access', 'hide_bg_on_login', 'peak_hold_enabled', 'peak_hold_time', 'monitor_cpu_ram']:
                 if key not in cfg['server']:
                     cfg['server'][key] = DEFAULT_CONFIG['server'][key]
                     
@@ -108,12 +114,18 @@ def load_config():
 
             for src in cfg['sources']:
                 if 'type' not in src: src['type'] = 'stream'
+                if src['type'] == 'rtp': src['type'] = 'rtp_mpegts'
                 if 'path' not in src or src['path'] is None: src['path'] = ''
                 if 'url' not in src or src['url'] is None: src['url'] = ''
                 if 'backup_file' not in src: src['backup_file'] = ''
                 if 'backup_playlist_name' not in src: src['backup_playlist_name'] = ''
                 if 'backup_mode' not in src: src['backup_mode'] = 'single'
                 if 'rtp_uri' not in src: src['rtp_uri'] = ''
+                if 'meta_export_method' not in src: src['meta_export_method'] = 'file'
+                if 'meta_tcp_ip' not in src: src['meta_tcp_ip'] = '127.0.0.1'
+                if 'meta_tcp_port' not in src: src['meta_tcp_port'] = 4001
+                if 'meta_tcp_prefix_mode' not in src: src['meta_tcp_prefix_mode'] = 'pira'
+                if 'meta_tcp_custom_prefix' not in src: src['meta_tcp_custom_prefix'] = ''
                 if 'repeat' not in src: src['repeat'] = True
                 if 'buffer_kb' not in src: src['buffer_kb'] = 1024
                 if 'meta_enabled' not in src: src['meta_enabled'] = False
@@ -165,12 +177,45 @@ def add_internal_log(event, level="INFO"):
     # Keep the last 1000 logs
     if len(INTERNAL_LOGS) > 1000:
         INTERNAL_LOGS.pop(0)
-    print(f"[{level}] {event}")
+        
+    current_time = datetime.now().strftime("%d/%m/%Y - %H:%M")
+    print(f"[{current_time}] [{level}] {event}")
 
 # --- 2. FLASK INIT & SOCKETIO ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.urandom(24)
+app.config['SESSION_COOKIE_NAME'] = 'wb_streamer_session'
 socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*')
+
+DIALOG_QUEUE = queue.Queue()
+DIALOG_RESULTS = {}
+
+def get_restarting_page(message, redirect_url="'/'"):
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>System Restart - WestBroadcast Streamer</title>
+        <style>
+            body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 100px; background: #eef2f5; color: #333; height: 100vh; margin: 0; }}
+            .card {{ background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; min-width: 400px; }}
+            h2 {{ color: #3c8dbc; margin-top: 0; font-weight: bold; font-size: 1.5rem; }}
+            .loader {{ border: 4px solid #f3f3f3; border-top: 4px solid #3c8dbc; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }}
+            @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="loader"></div>
+            <h2>{message}</h2>
+            <p>Please wait. You will be automatically redirected to the login page in 5 seconds.</p>
+        </div>
+        <script>
+            setTimeout(function() {{ window.location.href = {redirect_url}; }}, 5000);
+        </script>
+    </body>
+    </html>
+    """
 
 # --- 3. HELPERS ---
 def get_audio_files_info():
@@ -343,7 +388,8 @@ class SourceChannel:
 
                 # Fallback to ffprobe (reliable) if fast path failed or missing bitrate
                 if not self.codec_info or (src['type'] == 'stream' and 'Kbps' not in self.codec_info):
-                    if src['type'] == 'rtp': target = src['rtp_uri']
+                    if src['type'] == 'rtp_mpegts': target = src['rtp_uri']
+                    elif src['type'] == 'rtp_sdp': target = src['path']
                     elif src['type'] == 'file': target = src['path']
                     elif src['type'] == 'backup_dir':
                         if src.get('backup_mode', 'single') == 'single' and src.get('backup_file'):
@@ -402,7 +448,9 @@ class SourceChannel:
 
         src = CONFIG['sources'][self.index]
         if src['type'] == 'stream' and not src['url']: return "NOT CONFIGURED", "#999"
-        if src['type'] == 'rtp' and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
+        if src['type'] == 'rtp_mpegts' and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
+        if src['type'] == 'rtp_sdp' and not src['path']: return "NOT CONFIGURED", "#999"
+        if src['type'] == 'rtp_sdp' and src['path'] and not os.path.exists(src['path']): return "FILE NOT FOUND", "#b00"
         if src['type'] == 'device' and src.get('input_device') is None: return "NOT CONFIGURED", "#999"
         if src['type'] == 'file' and not src['path']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'backup_dir':
@@ -531,12 +579,18 @@ class SourceChannel:
                             self.playlist_idx += 1
                     else:
                         self.status_text = "FILE ERROR"
-            elif src['type'] == 'rtp':
+            elif src['type'] == 'rtp_mpegts':
                 if src['rtp_uri']:
                     valid = True
                     cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
                 else:
                     self.status_text = "NO CONFIG"
+            elif src['type'] == 'rtp_sdp':
+                if src['path'] and os.path.exists(src['path']):
+                    valid = True
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,udp,rtp', '-i', src['path']] + filter_arg
+                else:
+                    self.status_text = "FILE ERROR"
             elif src['type'] == 'tone':
                 valid = True
                 freq = src.get('tone_freq', 1000)
@@ -596,7 +650,6 @@ class SourceChannel:
 
             except Exception as e:
                 self.status_text = "UNREACHABLE"
-                # On ne met pas de break ici pour laisser le finally gérer la reconnexion
             finally:
                 is_normal_eof = False
                 if self.process:
@@ -773,7 +826,7 @@ class BroadcastEngine:
                 if i == self.current_source_idx:
                     self.current_metadata_title = title
 
-                if src['meta_enabled'] and src['meta_path'] and title:
+                if src['meta_enabled'] and title:
                     # Check "Export only when played" option
                     if src.get('meta_only_played') and i != self.current_source_idx:
                         continue
@@ -806,10 +859,49 @@ class BroadcastEngine:
 
                     if final_title != last_titles[i]:
                         last_titles[i] = final_title
-                        try:
-                            with open(src['meta_path'], 'w', encoding='utf-8-sig') as f:
-                                f.write(final_title)
-                        except: pass
+                        
+                        export_method = src.get('meta_export_method', 'file')
+                        
+                        if export_method == 'file' and src.get('meta_path'):
+                            try:
+                                with open(src['meta_path'], 'w', encoding='utf-8-sig') as f:
+                                    f.write(final_title)
+                            except: pass
+                            
+                        elif export_method == 'tcp':
+                            tcp_ip = src.get('meta_tcp_ip', '127.0.0.1')
+                            tcp_port = int(src.get('meta_tcp_port', 4001))
+                            try:
+                                prefix = ""
+                                mode = src.get('meta_tcp_prefix_mode', 'pira')
+                                if mode == 'pira': prefix = "RT="
+                                elif mode == 'audemat1': prefix = "TEXT="
+                                elif mode == 'audemat2': prefix = "RT_TEXT="
+                                elif mode == 'stereotool': prefix = "THIMEORT="
+                                elif mode == 'custom': prefix = src.get('meta_tcp_custom_prefix', '')
+                                
+                                payload_str = f"{prefix}{final_title}\r\n"
+                                payload = payload_str.encode('ascii', errors='ignore')
+                                
+                                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                                    s.settimeout(1.5)
+                                    s.connect((tcp_ip, tcp_port))
+                                    
+                                    s.settimeout(0.1)
+                                    try:
+                                        s.recv(1024)
+                                    except:
+                                        pass
+                                        
+                                    s.sendall(payload)
+                                    
+                                    try:
+                                        s.recv(1024)
+                                    except:
+                                        pass
+                                        
+                            except Exception as e:
+                                add_internal_log(f"TCP Metadata failed for {tcp_ip}:{tcp_port} - Error: {str(e)}", "ERROR")
             
             time.sleep(10)
 
@@ -825,7 +917,7 @@ class BroadcastEngine:
                 # 1. Start / Stop managmeent
                 should_run = False
                 if src_cfg['type'] == 'stream': should_run = True
-                elif src_cfg['type'] == 'rtp': should_run = True 
+                elif src_cfg['type'] in ['rtp_mpegts', 'rtp_sdp']: should_run = True 
                 elif src_cfg['type'] == 'tone': should_run = True
                 elif src_cfg['type'] == 'device': should_run = True
                 elif src_cfg['type'] in ['file', 'backup_dir']: 
@@ -833,12 +925,12 @@ class BroadcastEngine:
                      if self.current_source_idx == i: should_run = True
                 
                 if should_run:
-                    if src_cfg['type'] == 'file' and not src_cfg['path']: should_run = False
+                    if src_cfg['type'] in ['file', 'rtp_sdp'] and not src_cfg['path']: should_run = False
                     if src_cfg['type'] == 'backup_dir':
                         if src_cfg.get('backup_mode', 'single') == 'single' and not src_cfg.get('backup_file'): should_run = False
                         if src_cfg.get('backup_mode', 'single') == 'playlist' and not src_cfg.get('backup_playlist_name'): should_run = False
                     if src_cfg['type'] == 'stream' and not src_cfg['url']: should_run = False
-                    if src_cfg['type'] == 'rtp' and not src_cfg['rtp_uri']: should_run = False
+                    if src_cfg['type'] == 'rtp_mpegts' and not src_cfg['rtp_uri']: should_run = False
                     if src_cfg['type'] == 'device' and src_cfg.get('input_device') is None: should_run = False
 
                 if should_run and not ch.running: ch.start()
@@ -974,7 +1066,8 @@ class BroadcastEngine:
                            s = CONFIG['sources'][candidate_idx]
                            is_conf = False
                            if s['type'] == 'stream' and s['url']: is_conf = True
-                           elif s['type'] == 'rtp' and s['rtp_uri']: is_conf = True
+                           elif s['type'] == 'rtp_mpegts' and s['rtp_uri']: is_conf = True
+                           elif s['type'] == 'rtp_sdp' and s['path'] and os.path.exists(s['path']): is_conf = True
                            elif s['type'] == 'file' and s['path']: is_conf = True
                            elif s['type'] == 'backup_dir':
                                if s.get('backup_mode', 'single') == 'single' and s.get('backup_file'): is_conf = True
@@ -1113,6 +1206,7 @@ engine = BroadcastEngine()
 def index():
     # Handling connection errors caused by redirects
     login_error = (request.args.get('error') == '1')
+    login_lockout = (request.args.get('error') == 'lockout')
     
     # Security logic in order to hide the accounts passwords (admin + operator) in the source code if the user is not logged in
     safe_cfg = CONFIG
@@ -1123,7 +1217,7 @@ def index():
         safe_cfg['smtp']['pass'] = ''
     
     if not session.get('logged_in'): 
-        return render_template('index.html', login_needed=True, cfg=safe_cfg, login_error=login_error)
+        return render_template('index.html', login_needed=True, cfg=safe_cfg, login_error=login_error, login_lockout=login_lockout)
         
     if request.method == 'POST':
         try:
@@ -1158,7 +1252,13 @@ def index():
                 
                 src = CONFIG['sources'][i]
                 src['input_device'] = int(new_in_dev) if (new_in_dev and new_in_dev != 'None') else None
-                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src['buffer_kb'] != new_buffer):
+                
+                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src['buffer_kb'] != new_buffer or
+                    src.get('meta_export_method') != request.form.get(f'meta_export_method{i}', 'file') or
+                    src.get('meta_tcp_ip') != request.form.get(f'meta_tcp_ip{i}', '127.0.0.1') or
+                    str(src.get('meta_tcp_port', 4001)) != request.form.get(f'meta_tcp_port{i}', '4001') or
+                    src.get('meta_tcp_prefix_mode') != request.form.get(f'meta_tcp_prefix_mode{i}', 'pira') or
+                    src.get('meta_tcp_custom_prefix') != request.form.get(f'meta_tcp_custom_prefix{i}', '')):
                     needs_restart = True
                 
                 src['type'] = new_type
@@ -1191,6 +1291,13 @@ def index():
                 src['meta_rtplus_separator'] = sep_val
                 
                 src['meta_max_64'] = (request.form.get(f'meta_max_64{i}') == 'on')
+                
+                # TCP ASCII parameters
+                src['meta_export_method'] = request.form.get(f'meta_export_method{i}', 'file')
+                src['meta_tcp_ip'] = request.form.get(f'meta_tcp_ip{i}', '127.0.0.1')
+                src['meta_tcp_port'] = int(request.form.get(f'meta_tcp_port{i}', 4001))
+                src['meta_tcp_prefix_mode'] = request.form.get(f'meta_tcp_prefix_mode{i}', 'pira')
+                src['meta_tcp_custom_prefix'] = request.form.get(f'meta_tcp_custom_prefix{i}', '')
                 src['alert_silent'] = (request.form.get(f'alert_silent{i}') == 'on')
                 src['alert_unreachable'] = (request.form.get(f'alert_unreachable{i}') == 'on')
                 
@@ -1428,7 +1535,7 @@ def login():
     # Attempts amount verification
     if len(LOGIN_ATTEMPTS.get(ip, [])) >= 3:
         add_internal_log(f"3 failed login attempts from IP {ip}", "AUTH")
-        return "Too many failed login attempts. For security reasons, you must wait 90 seconds before trying again.", 429
+        return redirect(url_for('index', error='lockout'))
 
     # Credentials verification
     if request.form.get('username') == CONFIG['server']['user'] and request.form.get('password') == CONFIG['server']['password']:
@@ -1478,7 +1585,8 @@ def set_mode():
             s = CONFIG['sources'][i]
             is_conf = False
             if s['type'] == 'stream' and s['url']: is_conf = True
-            elif s['type'] == 'rtp' and s['rtp_uri']: is_conf = True
+            elif s['type'] == 'rtp_mpegts' and s['rtp_uri']: is_conf = True
+            elif s['type'] == 'rtp_sdp' and s['path'] and os.path.exists(s['path']): is_conf = True
             elif s['type'] == 'file' and s['path'] and os.path.exists(s['path']): is_conf = True
             elif s['type'] == 'backup_dir':
                 if s.get('backup_mode', 'single') == 'single' and s.get('backup_file') and os.path.exists(os.path.join(BACKUP_DIR, s.get('backup_file'))): is_conf = True
@@ -1521,6 +1629,7 @@ def update_security():
         CONFIG['server']['peak_hold_enabled'] = (request.form.get('peak_hold') == 'on')
         try: CONFIG['server']['peak_hold_time'] = int(request.form.get('peak_time', 3))
         except: CONFIG['server']['peak_hold_time'] = 3
+        CONFIG['server']['monitor_cpu_ram'] = (request.form.get('monitor_cpu') == 'on')
         CONFIG['server']['op_enabled'] = (request.form.get('op_enabled') == 'on')
         CONFIG['server']['op_user'] = request.form.get('op_user', 'operator')
         CONFIG['server']['op_pass'] = request.form.get('op_pass', 'operator')
@@ -1539,7 +1648,8 @@ def update_security():
                 subprocess.Popen([sys.executable] + args)
                 os._exit(0)
             threading.Thread(target=restart_thread).start()
-            return f"""<!DOCTYPE html><html><head></head><body style="font-family:sans-serif;text-align:center;padding-top:50px;"><h2>HTTP Port modified. The decoder is restarting... Please wait.</h2><p>You will be redirected to the main page in 5 seconds.</p><script>setTimeout(function(){{ window.location.href = window.location.protocol + '//' + window.location.hostname + ':{new_port}/'; }}, 5000);</script></body></html>"""
+            redirect_js = f"window.location.protocol + '//' + window.location.hostname + ':{new_port}/'"
+            return get_restarting_page("HTTP Port modified. The decoder is restarting... Please wait.", redirect_js)
             
         return redirect(url_for('index'))
     except: return "Error"
@@ -1558,7 +1668,7 @@ def sys_restart():
         subprocess.Popen([sys.executable] + args)
         os._exit(0)
     threading.Thread(target=restart_thread).start()
-    return """<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5;url=/"></head><body style="font-family:sans-serif;text-align:center;padding-top:50px;"><h2>The decoder is restarting... Please wait.</h2><p>You will be redirected to the main page in 5 seconds.</p></body></html>"""
+    return get_restarting_page("The decoder is restarting... Please wait.")
 
 @app.route('/sys_restore')
 def sys_restore():
@@ -1574,13 +1684,23 @@ def sys_restore():
         subprocess.Popen([sys.executable] + args)
         os._exit(0)
     threading.Thread(target=restart_thread).start()
-    return """<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5;url=/"></head><body style="font-family:sans-serif;text-align:center;padding-top:50px;"><h2>Resetting the decoder to factory settings... Please wait.</h2><p>You will be redirected to the main page in 5 seconds.</p></body></html>"""
+    return get_restarting_page("Resetting the decoder to factory settings... Please wait.")
 
 @app.route('/sys_export')
 def sys_export():
     if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
     save_config(CONFIG) 
     return send_file(CONFIG_FILE, as_attachment=True, download_name='config.json')
+
+@app.route('/browse_file', methods=['GET'])
+def browse_file():
+    if not session.get('logged_in'): return jsonify({"path": ""})
+    req_id = str(time.time())
+    DIALOG_QUEUE.put(req_id)
+    while req_id not in DIALOG_RESULTS:
+        time.sleep(0.1)
+    path = DIALOG_RESULTS.pop(req_id)
+    return jsonify({"path": path})
 
 @app.route('/sys_import', methods=['POST'])
 def sys_import():
@@ -1598,7 +1718,7 @@ def sys_import():
             subprocess.Popen([sys.executable] + args)
             os._exit(0)
         threading.Thread(target=restart_thread).start()
-        return """<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5;url=/"></head><body style="font-family:sans-serif;text-align:center;padding-top:50px;"><h2>The configuration file has been imported successfully. Restarting the decoder... </h2><p>You will be redirected to the main page in 5 seconds.</p></body></html>"""
+        return get_restarting_page("The configuration file has been imported successfully. Restarting the decoder...")
     return "Error"
 
 @socketio.on('set_analysis_state')
@@ -1609,8 +1729,25 @@ def handle_analysis_state(data):
 
 # --- 7. LOOPS & MAIN ---
 def socket_emit_loop():
+    last_sys_check = 0
+    cached_cpu = None
+    cached_ram = None
+    
     while True:
         try:
+            now = time.time()
+            if CONFIG['server'].get('monitor_cpu_ram') and PSUTIL_AVAILABLE:
+                if now - last_sys_check >= 10:
+                    try:
+                        cached_cpu = psutil.cpu_percent(interval=None)
+                        cached_ram = psutil.virtual_memory().percent
+                    except:
+                        pass
+                    last_sys_check = now
+            else:
+                cached_cpu = None
+                cached_ram = None
+
             statuses = [engine.get_source_status(i) for i in range(3)]
             codecs = engine.get_codecs()
             
@@ -1623,9 +1760,13 @@ def socket_emit_loop():
                     if engine.current_metadata_title:
                         np_str += f" ({engine.current_metadata_title})"
                 else: np_str = "Now playing: ..."
-            elif src['type'] == 'rtp':
+            elif src['type'] == 'rtp_mpegts':
                 if src['rtp_uri']:
-                    np_str = f"Now playing: {src['rtp_uri']} (RTP)"
+                    np_str = f"Now playing: {src['rtp_uri']} (MPEG-TS)"
+                else: np_str = "Now playing: ..."
+            elif src['type'] == 'rtp_sdp':
+                if src['path']:
+                    np_str = f"Now playing: {src['path']} (SDP)"
                 else: np_str = "Now playing: ..."
             elif src['type'] == 'tone':
                 np_str = "Now playing: Test Tone Generator"
@@ -1639,12 +1780,14 @@ def socket_emit_loop():
                 'vu': engine.vu_data,
                 'active_idx': engine.current_source_idx,
                 'uptime': engine.get_uptime_string(),
+                'cpu': cached_cpu,
+                'ram': cached_ram,
                 'src_statuses': statuses,
                 'codecs': codecs,
                 'now_playing': np_str
             })
         except: pass
-        time.sleep(0.1) 
+        time.sleep(0.1)
 
 def start_gui():
     root = tk.Tk()
@@ -1659,6 +1802,19 @@ def start_gui():
     tk.Label(root, text=f"IP: {ip}", fg="#333", font=("Segoe UI", 10)).pack(pady=2)
     tk.Button(root, text="CLICK HERE TO OPEN THE WEBSERVER INTERFACE\n(Default credentials: admin/admin)", bg="#3c8dbc", fg="white", font=("Segoe UI", 9, "bold"), command=lambda: webbrowser.open(f"http://localhost:{port}")).pack(pady=10)
     
+    def check_dialog_queue():
+        try:
+            req_id = DIALOG_QUEUE.get_nowait()
+            from tkinter import filedialog
+            root.attributes('-topmost', True)
+            path = filedialog.askopenfilename(parent=root, title="Select a File")
+            root.attributes('-topmost', False)
+            DIALOG_RESULTS[req_id] = path
+        except queue.Empty:
+            pass
+        root.after(200, check_dialog_queue)
+        
+    check_dialog_queue()
     root.mainloop()
 
 if __name__ == '__main__':
