@@ -874,9 +874,11 @@ class BroadcastEngine:
                             try:
                                 prefix = ""
                                 mode = src.get('meta_tcp_prefix_mode', 'pira')
-                                if mode == 'pira': prefix = "RT="
-                                elif mode == 'audemat1': prefix = "TEXT="
-                                elif mode == 'audemat2': prefix = "RT_TEXT="
+                                if mode == 'pira1': prefix = "RT="
+                                elif mode == 'pira2': prefix = "RT1="
+                                elif mode == 'pira3': prefix = "RT2="
+                                elif mode == 'audematpira': prefix = "TEXT="
+                                elif mode == 'audemat': prefix = "RT_TEXT="
                                 elif mode == 'stereotool': prefix = "THIMEORT="
                                 elif mode == 'custom': prefix = src.get('meta_tcp_custom_prefix', '')
                                 
