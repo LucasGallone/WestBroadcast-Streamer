@@ -8,7 +8,7 @@ echo Verification of required files... and if missing, installation of dependenc
 echo (This step may take a few moments when launching for the first time.)
 echo.
 
-pip install --quiet flask flask-socketio numpy sounddevice
+pip install --quiet flask flask-socketio numpy sounddevice psutil
 
 echo.
 echo ================================================
