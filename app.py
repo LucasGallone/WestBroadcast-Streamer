@@ -786,6 +786,8 @@ class BroadcastEngine:
     def _meta_loop(self, current_run_id):
         last_titles =["", "", ""]
         raw_titles = ["", "", ""] # Saves the raw "current song" metadata to prevent songs titles from being deleted 
+        tcp_sockets = {0: None, 1: None, 2: None} # Keeping the connection alive
+        
         while self.running and self.run_id == current_run_id:
             for i in range(3):
                 src = CONFIG['sources'][i]
@@ -885,27 +887,50 @@ class BroadcastEngine:
                                 payload_str = f"{prefix}{final_title}\r\n"
                                 payload = payload_str.encode('ascii', errors='ignore')
                                 
-                                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                                    s.settimeout(1.5)
-                                    s.connect((tcp_ip, tcp_port))
-                                    
+                                def connect_and_flush(ip, port):
+                                    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                    s.settimeout(2.0)
+                                    s.connect((ip, port))
                                     s.settimeout(0.1)
-                                    try:
-                                        s.recv(1024)
-                                    except:
-                                        pass
-                                        
-                                    s.sendall(payload)
+                                    try: s.recv(1024)
+                                    except: pass
+                                    return s
                                     
-                                    try:
-                                        s.recv(1024)
-                                    except:
-                                        pass
-                                        
+                                if tcp_sockets[i] is None:
+                                    tcp_sockets[i] = connect_and_flush(tcp_ip, tcp_port)
+                                    
+                                s = tcp_sockets[i]
+                                
+                                try:
+                                    s.settimeout(2.0)
+                                    s.sendall(payload)
+                                    s.settimeout(0.1)
+                                    try: s.recv(1024)
+                                    except: pass
+                                except Exception:
+                                    try: s.close()
+                                    except: pass
+                                    tcp_sockets[i] = connect_and_flush(tcp_ip, tcp_port)
+                                    s = tcp_sockets[i]
+                                    s.settimeout(2.0)
+                                    s.sendall(payload)
+                                    s.settimeout(0.1)
+                                    try: s.recv(1024)
+                                    except: pass
+                                    
                             except Exception as e:
+                                if tcp_sockets[i]:
+                                    try: tcp_sockets[i].close()
+                                    except: pass
+                                    tcp_sockets[i] = None
                                 add_internal_log(f"TCP Metadata failed for {tcp_ip}:{tcp_port} - Error: {str(e)}", "ERROR")
             
             time.sleep(10)
+            
+        for s in tcp_sockets.values():
+            if s:
+                try: s.close()
+                except: pass
 
     def _monitor_loop(self, current_run_id):
         block_duration = BLOCK_SIZE / SAMPLE_RATE
