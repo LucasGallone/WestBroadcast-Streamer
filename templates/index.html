@@ -663,11 +663,11 @@
                 <div class="form-row">
                     <label style="flex: 0 0 150px;">Prefix Format:</label>
                     <select name="meta_tcp_prefix_mode{{i}}" onchange="toggleTcpPrefix('{{i}}')" id="sel-tcp-prefix-{{i}}" style="margin: 0;">
-                        <option value="audemat" {% if cfg.sources[i].meta_tcp_prefix_mode == 'audemat2' %}selected{% endif %}>Audemat (RT_TEXT=)</option>
-                        <option value="audematpira" {% if cfg.sources[i].meta_tcp_prefix_mode == 'audemat1' %}selected{% endif %}>Audemat & PIRA (TEXT=)</option>
-                        <option value="pira1" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira' %}selected{% endif %}>PIRA - Prefix #1 (RT=)</option>
-                        <option value="pira2" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira1' %}selected{% endif %}>PIRA - Prefix #2 (RT1=)</option>
-                        <option value="pira3" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira2' %}selected{% endif %}>PIRA - Prefix #3 (RT2=)</option>
+                        <option value="audemat" {% if cfg.sources[i].meta_tcp_prefix_mode == 'audemat' %}selected{% endif %}>Audemat (RT_TEXT=)</option>
+                        <option value="audematdeva" {% if cfg.sources[i].meta_tcp_prefix_mode == 'audematdeva' %}selected{% endif %}>Audemat & DEVA Broadcast (TEXT=)</option>
+                        <option value="pira1" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira1' %}selected{% endif %}>PIRA - Prefix #1 (RT=)</option>
+                        <option value="pira2" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira2' %}selected{% endif %}>PIRA - Prefix #2 (RT1=)</option>
+                        <option value="pira3" {% if cfg.sources[i].meta_tcp_prefix_mode == 'pira3' %}selected{% endif %}>PIRA - Prefix #3 (RT2=)</option>
                         <option value="stereotool" {% if cfg.sources[i].meta_tcp_prefix_mode == 'stereotool' %}selected{% endif %}>Stereo Tool (THIMEORT=)</option>
                         <option value="custom" {% if cfg.sources[i].meta_tcp_prefix_mode == 'custom' %}selected{% endif %}>[User-defined prefix...]</option>
                     </select>
