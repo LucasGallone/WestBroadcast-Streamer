@@ -48,9 +48,9 @@ DEFAULT_CONFIG = {
     'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
-        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-main.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup1.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup2.txt', 'meta_only_played': False, 'meta_normalize': False, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
+        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
+        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
+        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
     ],
     'settings': {
         'loss_threshold_db': -45.0,
@@ -848,9 +848,6 @@ class BroadcastEngine:
 
                     # Radiotext+ / StereoTool formatting
                     if src.get('meta_rtplus'):
-                        # Special characters must be escaped in Stereo Tool (even if there is no artist or title)
-                        final_title = final_title.replace(':', '\\:').replace('/', '\\/')
-                        
                         separator = src.get('meta_rtplus_separator', ' - ')
                         if separator in final_title:
                             parts = final_title.split(separator, 1)
@@ -884,7 +881,29 @@ class BroadcastEngine:
                                 elif mode == 'stereotool': prefix = "THIMEORT="
                                 elif mode == 'custom': prefix = src.get('meta_tcp_custom_prefix', '')
                                 
-                                payload_str = f"{prefix}{final_title}\r\n"
+                                payload_title = final_title
+                                if mode == 'stereotool':
+                                    if src.get('meta_rtplus'):
+                                        escaped_parts = []
+                                        matches = list(re.finditer(r'\\\+(?:Ar|Ti).*?\\\-', payload_title))
+                                        last_idx = 0
+                                        for m in matches:
+                                            part = payload_title[last_idx:m.start()]
+                                            for c in ['/', '|', ':', '>', '<']:
+                                                part = part.replace(c, f"\\{c}")
+                                            escaped_parts.append(part)
+                                            escaped_parts.append(m.group(0))
+                                            last_idx = m.end()
+                                        part = payload_title[last_idx:]
+                                        for c in ['/', '|', ':', '>', '<']:
+                                            part = part.replace(c, f"\\{c}")
+                                        escaped_parts.append(part)
+                                        payload_title = "".join(escaped_parts)
+                                    else:
+                                        for c in ['/', '|', ':', '>', '<']:
+                                            payload_title = payload_title.replace(c, f"\\{c}")
+                                
+                                payload_str = f"{prefix}{payload_title}\r\n"
                                 payload = payload_str.encode('ascii', errors='ignore')
                                 
                                 def connect_and_flush(ip, port):
