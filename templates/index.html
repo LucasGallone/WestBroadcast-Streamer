@@ -161,7 +161,7 @@
             color: white;
             padding: 8px 12px;
             border-radius: 4px;
-            white-space: normal;
+            white-space: pre-wrap;
             width: 250px;
             font-size: 0.85rem;
             line-height: 1.3;
@@ -233,12 +233,12 @@
 {% if login_needed %}
 <div class="modal" style="display:flex;">
     <div class="modal-box">
-        <h2>Please log in to continue</h2>
+        <h2>Please log in to access the interface</h2>
         {% if login_error %}
         <div style="color: red; margin-bottom: 15px; font-weight: bold;">Access denied: Invalid credentials.</div>
         {% endif %}
         {% if login_lockout %}
-        <div style="color: red; margin-bottom: 15px; font-weight: bold; font-size: 0.95rem;">Too many failed login attempts.<br>For security reasons, you must wait 90 seconds before trying again.</div>
+        <div style="color: red; margin-bottom: 15px; font-weight: bold; font-size: 0.95rem;">Too many failed login attempts.<br>You must wait 90 seconds before trying again.</div>
         {% endif %}
         <form action="/login" method="POST">
             <input type="text" name="username" placeholder="Username" required>
@@ -259,7 +259,7 @@
             <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin-bottom: 15px; text-align: left; border: 1px solid #ddd;">
                 <h3 style="margin-top:0; font-size:1rem; color:var(--blue); border-bottom:1px solid #ddd; padding-bottom:5px;">General Settings</h3>
                 <div class="form-row"><label style="flex:0 0 200px;">Instance Name (Optional):</label><input type="text" name="srv_name" value="{{ cfg.server.instance_name }}"></div>
-                <div class="form-row"><label style="flex:0 0 200px;">HTTP Port (Restart required!):</label><input type="number" name="srv_port" value="{{ cfg.server.port }}" required></div>
+                <div class="form-row"><label style="flex:0 0 200px;">HTTP Port (Restart required):</label><input type="number" name="srv_port" value="{{ cfg.server.port }}" required></div>
                 <div class="form-row" style="justify-content: flex-start; gap: 10px; margin-top: 10px;">
                     <input type="checkbox" name="hide_bg" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.hide_bg_on_login %}checked{% endif %}>
                     <label style="flex:none; width:auto;">Hide VU meters, instance name and "Now Playing" status when logged out</label>
@@ -370,10 +370,10 @@
 {% if session.role == 'admin' %}
 <div id="smtp-modal" class="modal">
     <div class="modal-box" style="width: 95%; max-width: 950px;">
-        <h2>SMTP Settings (For sending alert emails)</h2>
+        <h2>SMTP Settings (To send automated email alerts)</h2>
         <form action="/update_smtp" method="POST">
             <div style="display: flex; align-items: center; justify-content: flex-start; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
-                <label style="font-weight: bold; color: #333; cursor: pointer; margin: 0;">Enable SMTP service:</label>
+                <label style="font-weight: bold; color: #333; cursor: pointer; margin: 0;">Click here to enable or disable the SMTP service:</label>
                 <input type="checkbox" name="smtp_enabled" style="width: auto !important; margin: 0 !important; display: inline-block !important; cursor: pointer;" {% if cfg.smtp.enabled %}checked{% endif %}>
             </div>
             
@@ -448,34 +448,53 @@
 {% endif %}
 
 <div id="upload-modal" class="modal">
-    <div class="modal-box" style="width: 850px; max-width: 95%;">
+    <!-- Increased modal width to 1350px for better visibility -->
+    <div class="modal-box" style="width: 1350px; max-width: 95%;">
         <h2 style="margin-bottom: 15px;">Backup Audio Files & Playlists Manager</h2>
         <div style="display: flex; gap: 20px; flex-wrap: wrap; text-align: left;">
             
             <!-- FILES SECTION -->
-            <div style="flex: 1; min-width: 320px;">
+            <div style="flex: 1; min-width: 450px;">
                 <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px; color:var(--blue); font-size:1.1rem;">Audio Files</h3>
                 <form id="upload-form" style="margin-bottom: 15px; background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px dashed #ccc;">
-                    <div style="display:flex; flex-direction:column; gap: 10px;">
-                        <input type="file" name="file" id="upload-file-input" accept="audio/*" required style="margin: 0; width:100%; box-sizing:border-box;">
-                        <button type="button" onclick="uploadAudioFile()" class="modal-btn btn-blue" style="margin: 0; padding: 8px;">Upload File</button>
+                    <div style="display:flex; gap: 15px;">
+                        <!-- File Upload -->
+                        <div style="flex:1; display:flex; flex-direction:column; gap: 5px;">
+                            <label style="font-weight:bold; font-size:0.9rem;">Upload File(s)</label>
+                            <input type="file" name="file" id="upload-file-input" accept="audio/*" multiple style="margin: 0; width:100%; box-sizing:border-box; padding: 5px; border: 1px solid #ccc; background: #fff;">
+                            <button type="button" onclick="uploadAudioData('file')" class="modal-btn btn-blue" style="margin: 0; padding: 8px;">Upload Selected File(s)</button>
+                        </div>
+                        <!-- Folder Upload -->
+                        <div style="flex:1; display:flex; flex-direction:column; gap: 5px;">
+                            <label style="font-weight:bold; font-size:0.9rem;">Add files from a folder</label>
+                            <input type="file" name="folder" id="upload-folder-input" webkitdirectory directory multiple style="margin: 0; width:100%; box-sizing:border-box; padding: 5px; border: 1px solid #ccc; background: #fff;">
+                            <button type="button" onclick="uploadAudioData('folder')" class="modal-btn btn-blue" style="margin: 0; padding: 8px;">Upload Folder Content</button>
+                        </div>
                     </div>
-                    <div id="upload-progress-container" style="display:none; margin-top: 10px; width: 100%; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+                    <div id="upload-progress-container" style="display:none; margin-top: 15px; width: 100%; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
                         <div id="upload-progress-bar" style="height: 10px; width: 0%; background: var(--success); transition: width 0.2s;"></div>
                     </div>
                     <div id="upload-status-text" style="margin-top: 5px; font-size: 0.85rem; font-weight: bold; color: var(--success); display: none;"></div>
                 </form>
-                <div style="height: 220px; overflow-y: auto; border: 1px solid #ccc; text-align: left; background:#fff;">
+                <!-- Increased list height to 450px -->
+                <div style="height: 450px; overflow-y: auto; border: 1px solid #ccc; text-align: left; background:#fff;">
                     <table class="logs-table">
-                        <thead><tr><th>Filename</th><th style="width:60px;">Action</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th style="width:30px; text-align:center;"><input type="checkbox" id="chk-all-files" onclick="toggleAllFiles(this)"></th>
+                                <th>Filename</th>
+                                <th style="width:120px; text-align:center;"><button type="button" class="btn-sec" style="color:white; background:var(--danger); border:none; padding:4px 10px; border-radius:3px; cursor:pointer;" onclick="deleteSelectedFiles()">Delete Selection</button></th>
+                            </tr>
+                        </thead>
                         <tbody id="audio-files-body">
                             {% for af in audio_files %}
                             <tr>
+                                <td style="text-align:center;"><input type="checkbox" class="file-chk" value="{{ af.name }}"></td>
                                 <td>{{ af.name }}</td>
-                                <td><button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('{{ af.name }}')">Delete</button></td>
+                                <td style="text-align:center;"><button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('{{ af.name }}')">Delete</button></td>
                             </tr>
                             {% else %}
-                            <tr><td colspan="2" style="text-align: center; padding: 15px;">No files uploaded yet.</td></tr>
+                            <tr><td colspan="3" style="text-align: center; padding: 15px;">No files uploaded yet.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -483,29 +502,33 @@
             </div>
             
             <!-- PLAYLISTS SECTION -->
-            <div style="flex: 1; min-width: 320px;">
+            <div style="flex: 1; min-width: 450px;">
                 <h3 style="margin-top:0; border-bottom: 1px solid #ddd; padding-bottom: 5px; color:var(--blue); font-size:1.1rem;">Playlists</h3>
                 <div style="background: #f9f9f9; padding: 10px; border-radius: 5px; border: 1px solid #ddd; height: calc(100% - 35px); box-sizing:border-box;">
                     <div style="display:flex; gap:5px; margin-bottom:15px;">
-                        <select id="pm-select" onchange="pmSelectPlaylist()" style="flex:1; padding:6px; border:1px solid #ccc; border-radius:3px;">
-                            <option value="">-- Select Playlist to Edit --</option>
+                        <select id="pm-select" onchange="pmSelectPlaylist()" style="flex:1; padding:6px; border:1px solid #ccc; border-radius:3px; min-width:0;">
+                            <option value="">-- No playlist available. Please create one. --</option>
                         </select>
-                        <button type="button" class="btn-sec" onclick="pmNewPlaylist()" style="color:black; border-color:#ccc; padding:6px 12px;">New</button>
-                        <button type="button" class="btn-sec" onclick="pmDeletePlaylist()" style="color:white; background:var(--danger); border-color:var(--danger); padding:6px 12px;">Delete</button>
+                        <button type="button" class="btn-sec" onclick="pmNewPlaylist()" style="color:black; border-color:#ccc; padding:6px 12px;">Create New Playlist</button>
+                        <button type="button" class="btn-sec" onclick="pmDeletePlaylist()" style="color:white; background:var(--danger); border-color:var(--danger); padding:6px 12px;">Delete Playlist</button>
                     </div>
                     
                     <div id="pm-editor" style="display:none;">
                         <div class="form-row"><label style="flex:0 0 50px;">Name:</label><input type="text" id="pm-name" style="padding:6px; border:1px solid #ccc; border-radius:3px;"></div>
-                        <div style="display:flex; gap:5px; margin-bottom:10px;">
-                            <select id="pm-add-file" style="flex:1; padding:6px; border:1px solid #ccc; border-radius:3px;">
-                                <option value="">-- Select a file to add --</option>
-                                {% for af in audio_files %}
-                                <option value="{{ af.name }}">{{ af.name }}</option>
-                                {% endfor %}
-                            </select>
-                            <button type="button" class="btn-sec" onclick="pmAddFile()" style="color:black; border-color:#ccc; padding:6px 12px;">Add</button>
+                        <!-- Made the select multiple and increased height to select multiple files at once -->
+                        <div style="display:flex; flex-direction:column; gap:5px; margin-bottom:10px;">
+                            <label style="font-size:0.85rem; font-weight:bold; color:#555;">Select one or multiple files (Hold CTRL/CMD or Shift):</label>
+                            <div style="display:flex; gap:5px; align-items:flex-start;">
+                                <select id="pm-add-file" multiple style="flex:1; padding:6px; border:1px solid #ccc; border-radius:3px; min-width:0; height: 160px;">
+                                    {% for af in audio_files %}
+                                    <option value="{{ af.name }}">{{ af.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn-sec" onclick="pmAddFile()" style="color:black; border-color:#ccc; padding:6px 12px; height: 160px; font-weight:bold;">Add</button>
+                            </div>
                         </div>
-                        <div id="pm-list" style="border:1px solid #ccc; background:#fff; height:130px; overflow-y:auto; margin-bottom:10px; border-radius:3px;"></div>
+                        <!-- Increased list height to 250px -->
+                        <div id="pm-list" style="border:1px solid #ccc; background:#fff; height:250px; overflow-y:auto; margin-bottom:10px; border-radius:3px;"></div>
                         <button type="button" class="modal-btn btn-blue" onclick="pmSavePlaylist()" style="margin:0; padding:8px;">Save Playlist</button>
                     </div>
                 </div>
@@ -750,9 +773,20 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="form-row" id="backup-playlist-shuffle-{{i}}" {% if cfg.sources[i].backup_mode != 'playlist' %}style="display:none;"{% endif %}>
+                            <label>Shuffle Playlist:</label>
+                            <input type="checkbox" name="backup_playlist_shuffle{{i}}" {% if cfg.sources[i].backup_playlist_shuffle %}checked{% endif %} style="flex: 0; width: auto !important; margin: 0;">
+                        </div>
+                    </div>
+                    <div class="form-row" id="row-memorize-pos-{{i}}" style="display:none;">
+                        <label style="flex: 0 0 250px;">Memorize playback position:<span class="info-icon-blue" data-tooltip="When this function is enabled, audio playback will resume exactly where it last stopped.">i</span></label>
+                        <input type="checkbox" name="memorize_pos{{i}}" {% if cfg.sources[i].memorize_pos %}checked{% endif %} style="flex: 0; width: auto !important; margin: 0;">
                     </div>
                     <div class="form-row"><label>Input Gain (dB):</label><input type="number" step="0.1" name="gain{{i}}" value="{{ cfg.sources[i].gain }}"></div>
-                    <div class="form-row" id="row-buffer-{{i}}"><label>Buffer Size (KB):</label><input type="number" step="1" min="64" name="buffer_kb{{i}}" value="{{ cfg.sources[i].buffer_kb }}"></div>
+                    <div class="form-row" id="row-max-latency-{{i}}">
+                        <label>Max Latency (ms):<span class="info-icon-blue" data-tooltip="Value in milliseconds.&#10;The lower the value, the closer the source playback will be to real-time (instantaneous) streaming.&#10;&#10;A value that is too low may cause regular audio dropouts, and the decoder will be more susceptible to brief network interruptions.&#10;Use with caution.&#10;&#10;Default value: 6000 (6 seconds)">i</span></label>
+                        <input type="number" step="1" min="100" name="max_latency_ms{{i}}" value="{{ cfg.sources[i].max_latency_ms }}">
+                    </div>
                     <input type="hidden" name="repeat{{i}}" value="on">
                     
                     <div id="row-tone-settings-{{i}}" style="display:none; background:#f0f0f0; padding:5px; border-radius:3px; margin-bottom:10px;">
@@ -784,8 +818,13 @@
                             </div>
                             
                             <div class="form-row" id="row-meta-path-{{i}}" {% if cfg.sources[i].meta_export_method == 'tcp' %}style="display:none;"{% endif %}>
-                               <label>Export Path:</label>
-                                <input type="text" name="meta_path{{i}}" value="{{ cfg.sources[i].meta_path }}">
+                               <label>Export Path:<span class="info-icon-blue" data-tooltip="Specify the path where you want to export the metadata content in text format. You can enter it manually or select the path using your operating system's file explorer by clicking the button to the right of the field.&#10;&#10;Don't forget to include the '.txt' extension.&#10;&#10;By default, the files are generated in the WestBroadcast Streamer installation folder.">i</span></label>
+                               <div style="flex: 1; display: flex; gap: 5px; min-width: 0;">
+                                   <input type="text" name="meta_path{{i}}" id="meta-path-input-{{i}}" value="{{ cfg.sources[i].meta_path }}" style="flex: 1; min-width: 0; margin: 0;">
+                                   <button type="button" class="btn-sec" onclick="browseFile('{{i}}', 'meta')" style="color: #333; border-color: #ccc; padding: 4px 10px; display: flex; align-items: center; justify-content: center; background: #eee;" title="Browse for a path...">
+                                       <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                   </button>
+                               </div>
                             </div>
                             
                             <div id="row-meta-tcp-{{i}}" {% if cfg.sources[i].meta_export_method != 'tcp' %}style="margin-top: 10px; margin-bottom: 25px; display: none;"{% else %}style="margin-top: 10px; margin-bottom: 25px;"{% endif %}>
@@ -797,7 +836,7 @@
                                 <input type="checkbox" name="meta_only_played{{i}}" {{ 'checked' if cfg.sources[i].meta_only_played else '' }}>
                             </div>
                             <div class="form-row">
-                                <label style="flex:0 0 280px;">Normalize letters with accents:</label>
+                                <label style="flex:0 0 280px;">Normalize letters with accents:<span class="info-icon-blue" data-tooltip="When this function is enabled, all accented letters will be converted to unaccented letters. For example, 'é' will become 'e' and 'ô' will become 'o'.&#10;&#10;This function can be useful for compatibility with some softwares.">i</span></label>
                                 <input type="checkbox" name="meta_normalize{{i}}" {{ 'checked' if cfg.sources[i].meta_normalize else '' }}>
                             </div>
                             <div class="form-row">
@@ -805,11 +844,11 @@
                                 <input type="checkbox" name="meta_uppercase{{i}}" {{ 'checked' if cfg.sources[i].meta_uppercase else '' }}>
                             </div>
                             <div class="form-row">
-                                <label style="flex:0 0 280px;">Limit to 64 characters for Radiotext (RDS):</label>
+                                <label style="flex: 0 0 380px;">Limit to 64 characters for Radiotext (RDS):<span class="info-icon-blue" data-tooltip="When this function is enabled, it ensures that the export is always limited to 64 characters in a 'clean' manner.&#10;&#10;If the text exceeds 64 characters, the tool truncates the content at the 61st character and appends '...' to the end.">i</span></label>
                                 <input type="checkbox" name="meta_max_64{{i}}" {{ 'checked' if cfg.sources[i].meta_max_64 else '' }}>
                             </div>
                             <div class="form-row">
-                               <label style="flex:0 0 280px;">Radiotext+ tags for Stereo Tool (Artist/Title):</label>
+                               <label style="flex: 0 0 380px;">Radiotext+ tags for Stereo Tool (Artist/Title):<span class="info-icon-blue" data-tooltip="Formats the text export to include 'Artist' and 'Title' Radiotext+ tags compatible with Stereo Tool.&#10;&#10;For Stereo Tool to recognize these tags, you must use the '\f' or '\F' argument in the 'Radiotext' field of your RDS configuration, preceding the path to your text file.&#10;&#10;For further details, please refer to the Stereo Tool documentation.">i</span></label>
                                 <input type="checkbox" name="meta_rtplus{{i}}" onclick="toggleRTPlus('{{i}}', this)" {{ 'checked' if cfg.sources[i].meta_rtplus else '' }}>
                             </div>
                            <div id="meta-rtplus-options-{{i}}" {% if not cfg.sources[i].meta_rtplus %}style="display:none;"{% endif %}>
@@ -873,27 +912,27 @@
                             </div>
                             <div class="form-row"><label>Output Gain (dB):</label><input type="number" step="0.1" name="out_gain" value="{{ cfg.audio.output_gain_db }}"></div>
                             <div class="form-row">
-                                <label>Output Buffer (ms):<span class="info-icon-blue" data-tooltip="Increase this value if you hear crackling or micro-cuts in the output.">i</span></label>
+                                <label>Output Buffer (ms):<span class="info-icon-blue" data-tooltip="Increase this value (only) if you hear crackling or micro-cuts in the output.&#10;&#10;Default value: 1000">i</span></label>
                                 <input type="number" step="1" name="out_latency" value="{{ cfg.audio.output_latency_ms }}">
                             </div>
                         </div>
                         <div style="flex:1; min-width:300px; padding-left:20px; border-left:1px solid #eee;">
                             <div class="form-row">
-                                <label>Loss Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is below this value, the source is considered silent.">i</span></label>
+                                <label>Loss Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is below this value, the source is considered silent.&#10;&#10;Default value: -45.0">i</span></label>
                                 <input type="number" step="0.1" name="loss_thresh" value="{{ cfg.settings.loss_threshold_db }}">
                             </div>
                             <div class="form-row">
-                                <label>Loss Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch to a backup source when silence is detected.">i</span></label>
+                                <label>Loss Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch to a backup source when silence is detected.&#10;&#10;Default value: 10">i</span></label>
                                 <input type="number" step="1" name="loss_time" value="{{ cfg.settings.loss_timeout_sec | int }}">
                             </div>
                         </div>
                         <div style="flex:1; min-width:300px; padding-left:20px; border-left:1px solid #eee;">
                             <div class="form-row">
-                                <label>Recovery Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is above this value, the source is considered to be functional again.">i</span></label>
+                                <label>Recovery Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is above this value, the source is considered to be functional again.&#10;&#10;Default value: -35.0">i</span></label>
                                 <input type="number" step="0.1" name="rec_thresh" value="{{ cfg.settings.recovery_threshold_db }}">
                             </div>
                             <div class="form-row">
-                                <label>Recovery Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch back to the source that was considered silent.">i</span></label>
+                                <label>Recovery Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch back to the source that was considered silent.&#10;&#10;Default value: 5">i</span></label>
                                 <input type="number" step="1" name="rec_time" value="{{ cfg.settings.recovery_timeout_sec | int }}">
                             </div>
                         </div>
@@ -904,8 +943,6 @@
         </div>
         <div class="footer-bar"><button type="submit" class="save-btn">Save changes and apply configuration</button></div>
     </form>
-    {% else %}
-    <div style="text-align:center; padding:50px; background:white;">You must log in to modify the configuration.</div>
     {% endif %}
 </div>
 </div> <!-- main-content closure -->
@@ -1011,7 +1048,8 @@
         document.getElementById('row-device-' + idx).style.display = 'none';
         document.getElementById('row-path-' + idx).style.display = 'none';
         document.getElementById('row-backup-dir-' + idx).style.display = 'none';
-        document.getElementById('row-buffer-' + idx).style.display = 'flex';
+        document.getElementById('row-max-latency-' + idx).style.display = 'flex';
+        document.getElementById('row-memorize-pos-' + idx).style.display = 'none';
         document.getElementById('meta-wrapper-' + idx).style.display = 'none';
         document.getElementById('row-tone-settings-' + idx).style.display = 'none';
 
@@ -1024,16 +1062,17 @@
             document.getElementById('row-path-' + idx).style.display = 'flex';
         } else if (val === 'device') {
             document.getElementById('row-device-' + idx).style.display = 'flex';
-            document.getElementById('row-buffer-' + idx).style.display = 'none';
         } else if (val === 'tone') {
             document.getElementById('row-tone-settings-' + idx).style.display = 'block';
-            document.getElementById('row-buffer-' + idx).style.display = 'none';
+            document.getElementById('row-max-latency-' + idx).style.display = 'none';
         } else if (val === 'backup_dir') {
             document.getElementById('row-backup-dir-' + idx).style.display = 'flex';
-            document.getElementById('row-buffer-' + idx).style.display = 'none';
+            document.getElementById('row-max-latency-' + idx).style.display = 'none';
+            document.getElementById('row-memorize-pos-' + idx).style.display = 'flex';
         } else { // file
             document.getElementById('row-path-' + idx).style.display = 'flex';
-            document.getElementById('row-buffer-' + idx).style.display = 'none';
+            document.getElementById('row-max-latency-' + idx).style.display = 'none';
+            document.getElementById('row-memorize-pos-' + idx).style.display = 'flex';
         }
     }
 
@@ -1071,6 +1110,7 @@
         let val = document.getElementById('sel-backup-mode-' + idx).value;
         document.getElementById('backup-single-' + idx).style.display = (val === 'single') ? 'flex' : 'none';
         document.getElementById('backup-playlist-' + idx).style.display = (val === 'playlist') ? 'flex' : 'none';
+        document.getElementById('backup-playlist-shuffle-' + idx).style.display = (val === 'playlist') ? 'flex' : 'none';
     }
 
     let globalPlaylists = JSON.parse('{{ cfg.playlists | tojson | safe }}');
@@ -1079,13 +1119,36 @@
 
     function pmUpdateSelects() {
         let sel = document.getElementById('pm-select');
-        let curSel = sel.value;
-        sel.innerHTML = '<option value="">-- Select Playlist to Edit --</option>';
-        for(let p in globalPlaylists) {
-            let opt = document.createElement('option');
-            opt.value = p; opt.innerText = p;
-            if(p === curSel) opt.selected = true;
-            sel.appendChild(opt);
+        // Prioritize pmCurrentEdit for reliable state tracking across updates
+        let curSel = pmCurrentEdit !== null ? pmCurrentEdit : sel.value;
+        sel.innerHTML = '';
+        
+        // Hide placeholder if playlists exist, otherwise show the no playlist message
+        if (Object.keys(globalPlaylists).length === 0) {
+            sel.innerHTML = '<option value="">-- No playlist available. Please create one. --</option>';
+            document.getElementById('pm-editor').style.display = 'none';
+        } else {
+            let matchFound = false;
+            for(let p in globalPlaylists) {
+                let opt = document.createElement('option');
+                opt.value = p; opt.innerText = p;
+                if(p === curSel) {
+                    opt.selected = true;
+                    matchFound = true;
+                }
+                sel.appendChild(opt);
+            }
+            
+            if (!matchFound) {
+                if (pmCurrentEdit === "") {
+                    // User is creating a new playlist, keep selection visually blank
+                    sel.selectedIndex = -1;
+                } else {
+                    // Auto-select the first playlist on load or if previous selection is invalid
+                    sel.selectedIndex = 0;
+                    pmSelectPlaylist();
+                }
+            }
         }
         
         for(let i=0; i<3; i++) {
@@ -1134,8 +1197,17 @@
     }
 
     function pmAddFile() {
-        let f = document.getElementById('pm-add-file').value;
-        if(f) { pmCurrentFiles.push(f); pmRenderList(); }
+        let sel = document.getElementById('pm-add-file');
+        let added = false;
+        // Loop through all options to support multiple selections
+        for (let i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].selected) {
+                pmCurrentFiles.push(sel.options[i].value);
+                added = true;
+                sel.options[i].selected = false; // Clear selection after adding
+            }
+        }
+        if(added) pmRenderList();
     }
 
     function pmRemoveFile(idx) { pmCurrentFiles.splice(idx, 1); pmRenderList(); }
@@ -1164,6 +1236,13 @@
     function pmSavePlaylist() {
         let newName = document.getElementById('pm-name').value.trim();
         if(!newName) { alert("Name required"); return; }
+        
+        // Check if the playlist is empty before saving
+        if(pmCurrentFiles.length === 0) {
+            alert("Your playlist cannot be empty. Please add at least one song to it.");
+            return;
+        }
+        
         if(pmCurrentEdit && pmCurrentEdit !== newName) {
             delete globalPlaylists[pmCurrentEdit];
         }
@@ -1171,6 +1250,9 @@
         pmSaveToServer();
         pmCurrentEdit = newName;
         document.getElementById('pm-select').value = newName;
+        
+        // Confirm successful save
+        alert("Playlist saved successfully.");
     }
 
     function pmSaveToServer() {
@@ -1183,12 +1265,18 @@
         });
     }
 
-    function browseFile(idx) {
-        fetch('/browse_file')
+    function browseFile(idx, targetType = 'source') {
+        // Use 'save' dialog for metadata exports, 'open' dialog for audio files
+        const reqType = targetType === 'meta' ? 'save' : 'open';
+        
+        fetch('/browse_file?type=' + reqType)
         .then(response => response.json())
         .then(data => {
             if (data.path && data.path !== "") {
-                document.getElementById('path-input-' + idx).value = data.path;
+                // Determine which input field to update based on the targetType
+                const inputId = targetType === 'meta' ? 'meta-path-input-' + idx : 'path-input-' + idx;
+                const inputElem = document.getElementById(inputId);
+                if (inputElem) inputElem.value = data.path;
             }
         })
         .catch(err => console.error(err));
@@ -1204,6 +1292,40 @@
         });
     }
 
+    function toggleAllFiles(source) {
+        let checkboxes = document.querySelectorAll('.file-chk');
+        for(let i=0; i<checkboxes.length; i++) checkboxes[i].checked = source.checked;
+    }
+
+    function deleteSelectedFiles() {
+        let checkboxes = document.querySelectorAll('.file-chk:checked');
+        let count = checkboxes.length;
+
+        if(count === 0) {
+            alert("No files selected.");
+            return;
+        }
+
+        let msg = (count === 1) 
+            ? "Are you sure you want to delete the selected file?" 
+            : "Are you sure you want to delete the " + count + " selected files?";
+
+        if(!confirm(msg)) return;
+        
+        let promises = [];
+        checkboxes.forEach(chk => {
+            let formData = new FormData();
+            formData.append("filename", chk.value);
+            promises.push(fetch('/delete_audio', { method: 'POST', body: formData }));
+        });
+        
+        Promise.all(promises).then(() => {
+            let selectAllChk = document.getElementById('chk-all-files');
+            if(selectAllChk) selectAllChk.checked = false;
+            refreshAudioTable();
+        });
+    }
+
     function refreshAudioTable() {
         fetch('/api/audio_files')
         .then(response => response.json())
@@ -1211,13 +1333,14 @@
             let tbody = document.getElementById('audio-files-body');
             tbody.innerHTML = "";
             if(data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 15px;">No audio file found in the "backup-audio-files" directory.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; padding: 15px;">No audio file found in the "backup-audio-files" directory.</td></tr>';
                 return;
             }
             data.forEach(af => {
                 let tr = document.createElement('tr');
-                tr.innerHTML = `<td>${af.name}</td>
-                                <td><button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('${af.name}')">Delete</button></td>`;
+                tr.innerHTML = `<td style="text-align:center;"><input type="checkbox" class="file-chk" value="${af.name}"></td>
+                                <td>${af.name}</td>
+                                <td style="text-align:center;"><button type="button" style="background: var(--danger); color: white; border: none; padding: 4px 8px; cursor: pointer; border-radius: 3px;" onclick="deleteAudioFile('${af.name}')">Delete</button></td>`;
                 tbody.appendChild(tr);
             });
             
@@ -1237,27 +1360,28 @@
             }
             let pmAdd = document.getElementById('pm-add-file');
             if(pmAdd) {
-                let cur = pmAdd.value;
-                pmAdd.innerHTML = '<option value="">-- Select a file to add --</option>';
+                // Keep selections if updating, or just rebuild options
+                pmAdd.innerHTML = '';
                 data.forEach(af => {
                     let opt = document.createElement('option');
                     opt.value = af.name; opt.innerText = af.name;
-                    if(af.name === cur) opt.selected = true;
                     pmAdd.appendChild(opt);
                 });
             }
         });
     }
 
-    function uploadAudioFile() {
-        let fileInput = document.getElementById('upload-file-input');
+    function uploadAudioData(type) {
+        let fileInput = document.getElementById(type === 'folder' ? 'upload-folder-input' : 'upload-file-input');
         if(fileInput.files.length === 0) {
-            alert("No audio file selected for upload.");
+            alert("No items selected for upload.");
             return;
         }
 
         let formData = new FormData();
-        formData.append("file", fileInput.files[0]);
+        for(let i = 0; i < fileInput.files.length; i++) {
+            formData.append("file", fileInput.files[i]);
+        }
 
         let xhr = new XMLHttpRequest();
         let progressContainer = document.getElementById('upload-progress-container');
@@ -1289,7 +1413,6 @@
                     statusText.style.display = "block";
                 }
             }
-            setTimeout(() => { progressContainer.style.display = 'none'; }, 2500);
         }, false);
 
         xhr.open("POST", "/upload_audio", true);
