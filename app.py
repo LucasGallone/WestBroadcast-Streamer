@@ -48,9 +48,9 @@ DEFAULT_CONFIG = {
     'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
-        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'buffer_kb': 1024, 'meta_enabled': False, 'meta_path': 'C:\\streamer-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
+        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
+        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
+        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
     ],
     'settings': {
         'loss_threshold_db': -45.0,
@@ -119,6 +119,7 @@ def load_config():
                 if 'url' not in src or src['url'] is None: src['url'] = ''
                 if 'backup_file' not in src: src['backup_file'] = ''
                 if 'backup_playlist_name' not in src: src['backup_playlist_name'] = ''
+                if 'backup_playlist_shuffle' not in src: src['backup_playlist_shuffle'] = False
                 if 'backup_mode' not in src: src['backup_mode'] = 'single'
                 if 'rtp_uri' not in src: src['rtp_uri'] = ''
                 if 'meta_export_method' not in src: src['meta_export_method'] = 'file'
@@ -127,7 +128,8 @@ def load_config():
                 if 'meta_tcp_prefix_mode' not in src: src['meta_tcp_prefix_mode'] = 'pira'
                 if 'meta_tcp_custom_prefix' not in src: src['meta_tcp_custom_prefix'] = ''
                 if 'repeat' not in src: src['repeat'] = True
-                if 'buffer_kb' not in src: src['buffer_kb'] = 1024
+                if 'max_latency_ms' not in src: src['max_latency_ms'] = 6000
+                if 'memorize_pos' not in src: src['memorize_pos'] = False
                 if 'meta_enabled' not in src: src['meta_enabled'] = False
                 if 'meta_path' not in src: src['meta_path'] = ''
                 if 'pre_buffer' in src: del src['pre_buffer']
@@ -208,7 +210,7 @@ def get_restarting_page(message, redirect_url="'/'"):
         <div class="card">
             <div class="loader"></div>
             <h2>{message}</h2>
-            <p>Please wait. You will be automatically redirected to the login page in 5 seconds.</p>
+            <p>You will be automatically redirected to the login page in 5 seconds.</p>
         </div>
         <script>
             setTimeout(function() {{ window.location.href = {redirect_url}; }}, 5000);
@@ -328,6 +330,7 @@ class SourceChannel:
         self.last_data_time = 0 
         self.is_reconnecting = False
         self.last_vu = {'l': -60.0, 'r': -60.0}
+        self.saved_positions = {}  # Tracks playback positions for local files
 
     def start(self):
         if self.running: return
@@ -336,8 +339,9 @@ class SourceChannel:
         self.playlist_idx = 0 # Position initialization
         
         src = CONFIG['sources'][self.index]
-        buf_kb = src.get('buffer_kb', 1024)
-        q_size = max(100, int(buf_kb * 1024 / (BLOCK_SIZE * CHANNELS * 4)))
+        max_lat_ms = src.get('max_latency_ms', 6000)
+        # Allocate enough physical queue size to hold twice the max latency (Safety margin)
+        q_size = max(200, int((max_lat_ms / 1000.0) * 2 * (SAMPLE_RATE / BLOCK_SIZE)))
         self.queue = queue.Queue(maxsize=q_size)
         
         # PROBE LOOP
@@ -493,8 +497,6 @@ class SourceChannel:
             self.is_reconnecting = False
             
             src = CONFIG['sources'][self.index]
-            user_buffer_kb = src.get('buffer_kb', 1024)
-            ffmpeg_net_buf_bytes = str(max(user_buffer_kb * 1024, 4096))
 
             # --- FM Processing Filters ---
             af_filters = []
@@ -520,6 +522,15 @@ class SourceChannel:
                     def in_callback(indata, frames, time_info, status):
                         if not self.running or engine.channels[self.index] is not self: return
                         if engine.current_source_idx == self.index:
+                            # Target Buffer / Catch-up logic for live sources
+                            if CONFIG['sources'][self.index]['type'] not in ['file', 'backup_dir', 'tone']:
+                                target_ms = CONFIG['sources'][self.index].get('max_latency_ms', 6000)
+                                max_items = int((target_ms / 1000.0) * SAMPLE_RATE / BLOCK_SIZE)
+                                if max_items < 1: max_items = 1
+                                while self.queue.qsize() >= max_items:
+                                    try: self.queue.get_nowait()
+                                    except queue.Empty: break
+                                    
                             if not self.queue.full(): self.queue.put(indata.copy())
                         else:
                             # Calculation of the VU meter data in background
@@ -550,10 +561,19 @@ class SourceChannel:
             ffmpeg_exe = 'ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg'
             ffmpeg_path = os.path.join(base_path, ffmpeg_exe)
 
+            target_path = None
+            start_pos = 0.0
+            
+            # Check if user wants to resume playback
+            memorize = src.get('memorize_pos', False)
+
             if src['type'] == 'file':
                 if src['path'] and os.path.exists(src['path']):
                     valid = True
-                    cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-stream_loop', '-1', '-re', '-i', src['path']] + filter_arg
+                    target_path = src['path']
+                    start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
+                    ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                    cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', src['path']] + filter_arg
                 else:
                     self.status_text = "FILE ERROR"
             elif src['type'] == 'backup_dir':
@@ -561,19 +581,27 @@ class SourceChannel:
                     bpath = os.path.join(BACKUP_DIR, src.get('backup_file', ''))
                     if src.get('backup_file') and os.path.exists(bpath):
                         valid = True
-                        cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-stream_loop', '-1', '-re', '-i', bpath] + filter_arg
+                        target_path = bpath
+                        start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
+                        ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                        cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
                     else:
                         self.status_text = "FILE ERROR"
                 else:
                     playlist = CONFIG.get('playlists', {}).get(src.get('backup_playlist_name', ''), [])
                     if playlist:
-                        if getattr(self, 'playlist_idx', 0) >= len(playlist):
+                        if src.get('backup_playlist_shuffle') and len(playlist) > 0:
+                            self.playlist_idx = int(np.random.randint(0, len(playlist)))
+                        elif getattr(self, 'playlist_idx', 0) >= len(playlist):
                             self.playlist_idx = 0
                         p_idx = self.playlist_idx
                         bpath = os.path.join(BACKUP_DIR, playlist[p_idx])
                         if os.path.exists(bpath):
                             valid = True
-                            cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re', '-i', bpath] + filter_arg
+                            target_path = bpath
+                            start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
+                            ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                            cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
                         else:
                             self.status_text = "FILE ERROR"
                             self.playlist_idx += 1
@@ -582,7 +610,8 @@ class SourceChannel:
             elif src['type'] == 'rtp_mpegts':
                 if src['rtp_uri']:
                     valid = True
-                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
+                    # Removed invalid -buffer_size to prevent crash, added low_delay
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer', '-flags', 'low_delay', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
                 else:
                     self.status_text = "NO CONFIG"
             elif src['type'] == 'rtp_sdp':
@@ -603,7 +632,8 @@ class SourceChannel:
             else: # stream
                 if src['url']:
                     valid = True
-                    cmd = [ffmpeg_path, '-re', '-hide_banner', '-loglevel', 'error', 
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', 
+                           '-fflags', 'nobuffer', '-flags', 'low_delay',
                            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
                            '-rw_timeout', rw_timeout,
                            '-i', src['url']] + filter_arg
@@ -640,13 +670,30 @@ class SourceChannel:
                     
                     self.last_data_time = time.time()
                     
+                    # Accurate playback position tracking for local files
+                    if target_path:
+                        frames_read = len(raw) / (2 * CHANNELS)
+                        start_pos += (frames_read / SAMPLE_RATE)
+                        self.saved_positions[target_path] = start_pos
+                    
                     int16_data = np.frombuffer(raw, dtype=np.int16).reshape(-1, CHANNELS)
                     float_data = int16_data.astype(np.float32) / 32768.0
+                    
+                    # Target Buffer / Catch-up logic for live sources
+                    if src['type'] not in ['file', 'backup_dir', 'tone']:
+                        target_ms = src.get('max_latency_ms', 1500)
+                        max_items = int((target_ms / 1000.0) * SAMPLE_RATE / BLOCK_SIZE)
+                        if max_items < 1: max_items = 1
+                        while self.queue.qsize() >= max_items:
+                            try:
+                                self.queue.get_nowait()
+                            except queue.Empty:
+                                break
                     
                     if not self.queue.full():
                         self.queue.put(float_data)
                     else:
-                        time.sleep(0.005) 
+                        time.sleep(0.005)
 
             except Exception as e:
                 self.status_text = "UNREACHABLE"
@@ -657,19 +704,25 @@ class SourceChannel:
                     try: self.process.kill()
                     except: pass
             
-            # SORTI DU BLOC FINALLY : Enchaînement de la playlist
-            if self.running and src['type'] == 'backup_dir' and src.get('backup_mode', 'single') == 'playlist' and valid and is_normal_eof:
-                self.playlist_idx = getattr(self, 'playlist_idx', 0) + 1
+            # SORTI DU BLOC FINALLY : Enchaînement de la playlist et bouclage
+            if self.running and valid and is_normal_eof and src['type'] in ['file', 'backup_dir']:
+                # Reset position on natural EOF to start from beginning next time
+                if target_path:
+                    self.saved_positions[target_path] = 0.0
+                    
+                if src['type'] == 'backup_dir' and src.get('backup_mode', 'single') == 'playlist':
+                    self.playlist_idx = getattr(self, 'playlist_idx', 0) + 1
+                    
                 time.sleep(0.1)
                 continue
                 
-                self.status_text = "UNREACHABLE"
-                self.is_reconnecting = True
-                
-                # 10 seconds timeout before the next reconnection attempt (if the stream has UNREACHABLE status)
-                for _ in range(100):
-                    if not self.running: break
-                    time.sleep(0.1)
+            self.status_text = "UNREACHABLE"
+            self.is_reconnecting = True
+            
+            # 10 seconds timeout before the next reconnection attempt (if the stream has UNREACHABLE status)
+            for _ in range(100):
+                if not self.running: break
+                time.sleep(0.1)
 
 
 class BroadcastEngine:
@@ -678,7 +731,15 @@ class BroadcastEngine:
         self.running = True
         self.run_id = time.time()
         self.stream = None
-        self.current_source_idx = 0
+        
+        # Restore forced source if manual mode is enabled
+        mode = CONFIG['settings'].get('selection_mode', 'auto')
+        if mode != 'auto':
+            try: self.current_source_idx = int(mode)
+            except: self.current_source_idx = 0
+        else:
+            self.current_source_idx = 0
+            
         self.tone_phase = 0
         
         self.vu_data = {
@@ -749,13 +810,54 @@ class BroadcastEngine:
             if device is not None: device = int(device)
             else: device = sd.default.device[1]
 
-            lat_sec = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
+            # Build Stream arguments dynamically to prevent parameter rejection
+            stream_kwargs = {
+                'device': device,
+                'samplerate': SAMPLE_RATE,
+                'channels': CHANNELS,
+                'dtype': 'float32',
+                'callback': self._audio_callback
+            }
 
-            self.stream = sd.OutputStream(
-                device=device, samplerate=SAMPLE_RATE, channels=CHANNELS,
-                dtype='float32', blocksize=BLOCK_SIZE, latency=lat_sec, callback=self._audio_callback
-            )
-            self.stream.start()
+            is_wasapi = False
+            try:
+                dev_info = sd.query_devices(device)
+                host_api = sd.query_hostapis(dev_info['hostapi'])['name']
+                
+                if 'WDM-KS' in host_api.upper():
+                    stream_kwargs['blocksize'] = 0
+                    stream_kwargs['latency'] = 'low'
+                elif 'WASAPI' in host_api.upper():
+                    stream_kwargs['blocksize'] = 0
+                    stream_kwargs['latency'] = 'low' # Safe native hardware latency to avoid parameter rejection
+                    is_wasapi = True
+                else:
+                    stream_kwargs['blocksize'] = BLOCK_SIZE
+                    stream_kwargs['latency'] = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
+            except:
+                stream_kwargs['blocksize'] = BLOCK_SIZE
+                stream_kwargs['latency'] = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
+
+            # Safe initialization loop
+            max_retries = 3 if is_wasapi else 1
+            last_err = None
+
+            for attempt in range(max_retries):
+                try:
+                    self.stream = sd.OutputStream(**stream_kwargs)
+                    self.stream.start()
+                    last_err = None
+                    break
+                except Exception as e:
+                    last_err = e
+                    if is_wasapi and attempt < max_retries - 1:
+                        time.sleep(1.0)
+                    else:
+                        break
+
+            if last_err is not None:
+                raise last_err
+
         except Exception as e:
             add_internal_log(f"Audio Output Error: {str(e)}", "ERROR")
             logging.error(f"Audio Output Error: {e}")
@@ -766,12 +868,35 @@ class BroadcastEngine:
         
         for ch in self.channels: ch.stop()
         if self.stream: 
-            try: self.stream.stop(); self.stream.close()
+            try: self.stream.stop() # Cleanly wait for audio buffers to finish, prevents WASAPI zombie states
             except: pass
+            
+            try: self.stream.close() # Release the hardware endpoint
+            except: pass
+            
+            self.stream = None
         
         gc.collect()
+
+        time.sleep(1.5)
+        
+        try:
+            sd._terminate()
+            sd._initialize()
+        except:
+            pass
+            
         self.channels = [SourceChannel(i) for i in range(3)]
-        self.current_source_idx = 0 
+        
+        # Preserve forced source across engine restarts
+        mode = CONFIG['settings'].get('selection_mode', 'auto')
+        if mode != 'auto':
+            try: self.current_source_idx = int(mode)
+            except: self.current_source_idx = 0
+        else:
+            self.current_source_idx = 0 
+            
+        self.current_metadata_title = "" # Reset title to prevent visual ghosting on restart
         
         # Restarting new threads
         self.t_monitor = threading.Thread(target=self._monitor_loop, args=(self.run_id,), daemon=True)
@@ -786,23 +911,35 @@ class BroadcastEngine:
     def _meta_loop(self, current_run_id):
         last_titles =["", "", ""]
         raw_titles = ["", "", ""] # Saves the raw "current song" metadata to prevent songs titles from being deleted 
+        last_stream_poll = [0, 0, 0] # Tracks last polling time to prevent server spam
         tcp_sockets = {0: None, 1: None, 2: None} # Keeping the connection alive
         
         while self.running and self.run_id == current_run_id:
+            now = time.time()
             for i in range(3):
                 src = CONFIG['sources'][i]
                 title = ""
                 
                 # Check stream URL first
                 if src['type'] == 'stream' and src['url']:
-                    try:
-                        extracted = extract_stream_title(src['url'])
-                    except:
-                        extracted = None
-                    if extracted is not None:
-                        title = extracted
+                    is_active = (i == self.current_source_idx)
+                    # Smart polling: 5s for the actively playing stream, 20s for inactive backups
+                    poll_interval = 5 if is_active else 20
+                    
+                    if now - last_stream_poll[i] >= poll_interval:
+                        try:
+                            extracted = extract_stream_title(src['url'])
+                        except:
+                            extracted = None
+                        last_stream_poll[i] = now
+                        
+                        if extracted is not None:
+                            title = extracted
+                            raw_titles[i] = extracted
+                        else:
+                            title = raw_titles[i] # Keeps the previous song name in case of a network failure
                     else:
-                        title = raw_titles[i] # Keeps the previous song name in case of a network failure
+                        title = raw_titles[i]
                 elif src['type'] == 'file' and src['path']:
                     title = os.path.basename(src['path'])
                     raw_titles[i] = title
@@ -944,7 +1081,8 @@ class BroadcastEngine:
                                     tcp_sockets[i] = None
                                 add_internal_log(f"TCP Metadata failed for {tcp_ip}:{tcp_port} - Error: {str(e)}", "ERROR")
             
-            time.sleep(10)
+            # Fast loop to update local files and "Now Playing" display almost instantly (1 second)
+            time.sleep(1)
             
         for s in tcp_sockets.values():
             if s:
@@ -1123,6 +1261,7 @@ class BroadcastEngine:
                         
                            if is_conf:
                                self.current_source_idx = candidate_idx
+                               self.current_metadata_title = "" # Reset title to prevent visual ghosting
                                found_backup = True
                                break
                        
@@ -1152,6 +1291,7 @@ class BroadcastEngine:
                                 rec_name = CONFIG['sources'][prio_idx]['name'].upper()
                                 add_internal_log(f"Audio recovery triggered. Switching back to {rec_name}.", "RECOVERY")
                                 self.current_source_idx = prio_idx
+                                self.current_metadata_title = "" # Reset title to prevent visual ghosting
                                 self.is_recovering[prio_idx] = False
                                 self.is_silence = False
                                 break
@@ -1208,9 +1348,30 @@ class BroadcastEngine:
             return
 
         ch = self.channels[self.current_source_idx]
-        try:
-            data = ch.queue.get_nowait()
-        except:
+
+        # Dynamic initialization of the local buffer to handle asynchronous blocks (WASAPI/WDM-KS)
+        if not hasattr(self, 'audio_buffer'):
+            self.audio_buffer = np.zeros((0, CHANNELS), dtype=np.float32)
+            self.last_played_idx = self.current_source_idx
+
+        # Buffer clearing during a source switch to prevent audio overlap
+        if self.last_played_idx != self.current_source_idx:
+            self.audio_buffer = np.zeros((0, CHANNELS), dtype=np.float32)
+            self.last_played_idx = self.current_source_idx
+
+        # Smart accumulation to meet the exact frame demand
+        while len(self.audio_buffer) < frames:
+            try:
+                data = ch.queue.get_nowait()
+                if len(self.audio_buffer) == 0:
+                    self.audio_buffer = data
+                else:
+                    self.audio_buffer = np.vstack((self.audio_buffer, data))
+            except queue.Empty:
+                break
+
+        # If the buffer is still insufficient, clean silence is returned to avoid a NumPy crash.
+        if len(self.audio_buffer) < frames:
             outdata.fill(0)
             self.vu_data['sources'][self.current_source_idx]['l'] = -60.0
             self.vu_data['sources'][self.current_source_idx]['r'] = -60.0
@@ -1218,12 +1379,12 @@ class BroadcastEngine:
             self.vu_data['out_r'] = -60.0
             return
 
-        if len(data) < frames:
-            outdata.fill(0)
-            return
+        # Extraction of the exact block size (Adapts to 441, 480, 1024, 2048, 4096, etc.)
+        data_to_process = self.audio_buffer[:frames]
+        self.audio_buffer = self.audio_buffer[frames:]
 
         gain_in = 10 ** (CONFIG['sources'][self.current_source_idx]['gain'] / 20.0)
-        input_sig = data * gain_in
+        input_sig = data_to_process * gain_in
         
         pk_src_l = np.max(np.abs(input_sig[:, 0])) if len(input_sig) > 0 else 0
         pk_src_r = np.max(np.abs(input_sig[:, 1])) if len(input_sig) > 0 else 0
@@ -1293,13 +1454,15 @@ def index():
                 new_backup_file = request.form.get(f'backup_file{i}', '')
                 new_backup_mode = request.form.get(f'backup_mode{i}', 'single')
                 new_playlist_name = request.form.get(f'backup_playlist_name{i}', '')
-                new_buffer = int(request.form.get(f'buffer_kb{i}', 1024))
+                new_playlist_shuffle = (request.form.get(f'backup_playlist_shuffle{i}') == 'on')
+                new_memorize_pos = (request.form.get(f'memorize_pos{i}') == 'on')
+                new_max_latency = int(request.form.get(f'max_latency_ms{i}', 6000))
                 new_in_dev = request.form.get(f'input_device{i}')
                 
                 src = CONFIG['sources'][i]
                 src['input_device'] = int(new_in_dev) if (new_in_dev and new_in_dev != 'None') else None
                 
-                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src['buffer_kb'] != new_buffer or
+                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('max_latency_ms') != new_max_latency or
                     src.get('meta_export_method') != request.form.get(f'meta_export_method{i}', 'file') or
                     src.get('meta_tcp_ip') != request.form.get(f'meta_tcp_ip{i}', '127.0.0.1') or
                     str(src.get('meta_tcp_port', 4001)) != request.form.get(f'meta_tcp_port{i}', '4001') or
@@ -1314,7 +1477,9 @@ def index():
                 src['backup_file'] = new_backup_file
                 src['backup_mode'] = new_backup_mode
                 src['backup_playlist_name'] = new_playlist_name
-                src['buffer_kb'] = new_buffer
+                src['backup_playlist_shuffle'] = new_playlist_shuffle
+                src['memorize_pos'] = new_memorize_pos
+                src['max_latency_ms'] = new_max_latency
                 
                 if new_type in ['file', 'backup_dir']:
                     src['repeat'] = True
@@ -1382,20 +1547,32 @@ def index():
 def upload_audio():
     if not session.get('logged_in'): return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
     if session.get('role') != 'admin' and not CONFIG['server'].get('op_backup_access'): return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
-    if 'file' not in request.files: return jsonify({'status': 'error', 'message': 'No file selected'})
-    file = request.files['file']
-    if file.filename == '': return jsonify({'status': 'error', 'message': 'No file selected'})
-    filename = secure_filename(file.filename)
+    if 'file' not in request.files: return jsonify({'status': 'error', 'message': 'No files selected'})
+    
+    files = request.files.getlist('file')
+    if not files or files[0].filename == '': return jsonify({'status': 'error', 'message': 'No files selected'})
+    
     # Formats whitelist for the backup audio files uploader
     allowed_ext = {'.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'}
-    ext = os.path.splitext(filename)[1].lower()
+    uploaded_count = 0
     
-    if ext not in allowed_ext:
-        return jsonify({'status': 'error', 'message': 'File type not accepted.'})
-        
-    file.save(os.path.join(BACKUP_DIR, filename))
-    add_internal_log(f"Backup audio file uploaded: {filename}", "SYSTEM")
-    return jsonify({'status': 'ok', 'message': 'File added to the directory.'})
+    for file in files:
+        if file and file.filename:
+            # Custom sanitation to keep spaces, dots, dashes and underscores
+            base_name = os.path.basename(file.filename)
+            safe_name = "".join(c for c in base_name if c.isalnum() or c in (' ', '.', '-', '_')).strip()
+            
+            ext = os.path.splitext(safe_name)[1].lower()
+            if ext in allowed_ext:
+                file.save(os.path.join(BACKUP_DIR, safe_name))
+                uploaded_count += 1
+                add_internal_log(f"Backup audio file uploaded: {safe_name}", "SYSTEM")
+                
+    if uploaded_count > 0:
+        file_str = "file" if uploaded_count == 1 else "files"
+        return jsonify({'status': 'ok', 'message': f'{uploaded_count} {file_str} added to the directory.'})
+    else:
+        return jsonify({'status': 'error', 'message': 'No valid files were uploaded (check file types).'})
 
 @app.route('/delete_audio', methods=['POST'])
 def delete_audio():
@@ -1619,7 +1796,9 @@ def set_mode():
     if mode != 'auto':
         try:
             forced_idx = int(mode)
-            engine.current_source_idx = forced_idx
+            if engine.current_source_idx != forced_idx:
+                engine.current_source_idx = forced_idx
+                engine.current_metadata_title = "" # Reset title to prevent visual ghosting
             engine.is_silence = False
             src_name = CONFIG['sources'][forced_idx]['name'].upper()
             add_internal_log(f"Manual mode enabled. Forcing playback of {src_name}.", "SYSTEM")
@@ -1656,6 +1835,7 @@ def set_mode():
         
         if engine.current_source_idx != best_idx:
             engine.current_source_idx = best_idx
+            engine.current_metadata_title = "" # Reset title to prevent visual ghosting
         engine.is_silence = False
         
     return redirect(url_for('index'))
@@ -1742,7 +1922,9 @@ def sys_export():
 def browse_file():
     if not session.get('logged_in'): return jsonify({"path": ""})
     req_id = str(time.time())
-    DIALOG_QUEUE.put(req_id)
+    # Retrieve the requested dialog type from the URL parameter (default is 'open')
+    dialog_type = request.args.get('type', 'open')
+    DIALOG_QUEUE.put((req_id, dialog_type))
     while req_id not in DIALOG_RESULTS:
         time.sleep(0.1)
     path = DIALOG_RESULTS.pop(req_id)
@@ -1816,6 +1998,12 @@ def socket_emit_loop():
                 else: np_str = "Now playing: ..."
             elif src['type'] == 'tone':
                 np_str = "Now playing: Test Tone Generator"
+            elif src['type'] == 'backup_dir':
+                # Fetch the filename directly from the metadata engine
+                if engine.current_metadata_title:
+                    np_str = f"Now playing: {engine.current_metadata_title}"
+                else:
+                    np_str = "Now playing: ..."
             else:
                 if src.get('path'):
                     np_str = f"Now playing: {src['path']}"
@@ -1850,10 +2038,23 @@ def start_gui():
     
     def check_dialog_queue():
         try:
-            req_id = DIALOG_QUEUE.get_nowait()
+            req_data = DIALOG_QUEUE.get_nowait()
+            # Handle tuple unpacking to support both 'open' and 'save' dialogs
+            if isinstance(req_data, tuple):
+                req_id, dialog_type = req_data
+            else:
+                req_id = req_data
+                dialog_type = 'open'
+                
             from tkinter import filedialog
             root.attributes('-topmost', True)
-            path = filedialog.askopenfilename(parent=root, title="Select a File")
+            
+            # Trigger the appropriate Windows dialog based on the request
+            if dialog_type == 'save':
+                path = filedialog.asksaveasfilename(parent=root, title="Save Export File As", defaultextension=".txt")
+            else:
+                path = filedialog.askopenfilename(parent=root, title="Select a File")
+                
             root.attributes('-topmost', False)
             DIALOG_RESULTS[req_id] = path
         except queue.Empty:
