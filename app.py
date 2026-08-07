@@ -77,7 +77,8 @@ DEFAULT_CONFIG = {
         'spam_delay': 120,
         'trigger_delay': 30,
         'tls': False
-    }
+    },
+    'playlists': {}
 }
 
 def load_config():
