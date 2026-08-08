@@ -1135,7 +1135,9 @@ class BroadcastEngine:
                 elif i != self.current_source_idx and ch.running:
                     # Backup sources playback
                     try:
-                        pre_buf = 2.0 
+                        max_lat_sec = src_cfg.get('max_latency_ms', 6000) / 1000.0
+                        pre_buf = min(1.5, max_lat_sec * 0.5) 
+                        
                         target_qsize = int(pre_buf * (SAMPLE_RATE / BLOCK_SIZE))
                         if target_qsize < 1: target_qsize = 1
                         q_sz = ch.queue.qsize()
