@@ -717,6 +717,7 @@
                             <option value="stream" {% if cfg.sources[i].type == 'stream' %}selected{% endif %}>IP Stream (HTTP / HTTPS)</option>
                             <option value="rtp_mpegts" {% if cfg.sources[i].type == 'rtp_mpegts' %}selected{% endif %}>RTP Stream (Via MPEG-TS)</option>
                             <option value="rtp_sdp" {% if cfg.sources[i].type == 'rtp_sdp' %}selected{% endif %}>RTP Stream (Via SDP File)</option>
+                            <option value="multiplex" {% if cfg.sources[i].type == 'multiplex' %}selected{% endif %}>Multiplex Stream (SAT&gt;IP / MPEG-TS)</option>
                             <option value="device" {% if cfg.sources[i].type == 'device' %}selected{% endif %}>Audio Input Device</option>
                             <option value="file" {% if cfg.sources[i].type == 'file' %}selected{% endif %}>Local File</option>
                             <option value="backup_dir" {% if cfg.sources[i].type == 'backup_dir' %}selected{% endif %}>Backup Audio Directory</option>
@@ -724,7 +725,53 @@
                         </select>
                     </div>
                     <div class="form-row" id="row-url-{{i}}"><label>URL:</label><input type="text" name="url{{i}}" value="{{ cfg.sources[i].url }}"></div>
-                    <div class="form-row" id="row-rtp-{{i}}" style="display:none;"><label>URI (e.g. udp://@:5004):</label><input type="text" name="rtp_uri{{i}}" value="{{ cfg.sources[i].rtp_uri }}"></div>
+                    <div class="form-row" id="row-rtp-{{i}}" style="display:none;"><label>URI (RTSP, UDP, etc.):</label><input type="text" name="rtp_uri{{i}}" value="{{ cfg.sources[i].rtp_uri }}"></div>
+                    
+                    <div id="row-multiplex-{{i}}" style="display:none; flex-direction:column; gap:10px; background:#f9f9f9; padding:10px; border-radius:4px; border:1px solid #eee; margin-bottom:10px;">
+                        <div class="form-row" style="margin-bottom:0;"><label>IP Address:</label><input type="text" name="sat_ip{{i}}" id="sat-ip-{{i}}" value="{{ cfg.sources[i].sat_ip }}"></div>
+                        <div class="form-row" style="margin-bottom:0;"><label>RTSP Port:</label><input type="number" name="sat_port{{i}}" id="sat-port-{{i}}" value="{{ cfg.sources[i].sat_port | default(554) }}"></div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Source:</label>
+                            <select name="sat_src{{i}}" id="sat-src-{{i}}">
+                                <option value="1" {% if cfg.sources[i].sat_src == 1 %}selected{% endif %}>1</option>
+                                <option value="2" {% if cfg.sources[i].sat_src == 2 %}selected{% endif %}>2</option>
+                            </select>
+                        </div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Frequency:</label><input type="number" name="sat_freq{{i}}" id="sat-freq-{{i}}" value="{{ cfg.sources[i].sat_freq | default(11515) }}"></div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Polarization:</label>
+                            <select name="sat_pol{{i}}" id="sat-pol-{{i}}">
+                                <option value="v" {% if cfg.sources[i].sat_pol == 'v' %}selected{% endif %}>Vertical</option>
+                                <option value="h" {% if cfg.sources[i].sat_pol == 'h' %}selected{% endif %}>Horizontal</option>
+                            </select>
+                        </div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Modulation System:</label>
+                            <select name="sat_msys{{i}}" id="sat-msys-{{i}}">
+                                <option value="dvbs" {% if cfg.sources[i].sat_msys == 'dvbs' %}selected{% endif %}>DVB-S</option>
+                                <option value="dvbs2" {% if cfg.sources[i].sat_msys == 'dvbs2' %}selected{% endif %}>DVB-S2</option>
+                            </select>
+                        </div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Symbol Rate:</label><input type="number" name="sat_sr{{i}}" id="sat-sr-{{i}}" value="{{ cfg.sources[i].sat_sr | default(4000) }}"></div>
+                    </div>
+                    
+                    <div class="form-row" id="row-sid-{{i}}" style="display:none;">
+                        <label>Service ID (SID):</label>
+                        <div style="flex: 1; display: flex; gap: 5px; min-width: 0;">
+                            <input type="text" name="sid{{i}}" id="sid-input-{{i}}" value="{{ cfg.sources[i].sid }}" style="flex: 1; min-width: 0; margin: 0;" placeholder="e.g. 3632">
+                            <button type="button" class="btn-sec" onclick="scanPrograms('{{i}}')" id="btn-scan-{{i}}" style="color: #333; border-color: #ccc; padding: 4px 10px; background: #eee;">Scan Services</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row" id="row-pid-{{i}}" style="display:none; margin-top:-5px; padding-bottom:5px;">
+                        <label style="color: #666; font-size: 0.85rem;">...or Audio Packet ID (PID):</label>
+                        <input type="text" name="pid{{i}}" value="{{ cfg.sources[i].pid }}" style="margin: 0;" placeholder="(Overrides SID if used)">
+                    </div>
+                    
+                    <div class="form-row" id="row-sid-select-{{i}}" style="display:none; margin-top:-5px; padding-bottom:5px;">
+                        <label style="color: var(--blue);">Select Service:</label>
+                        <!-- Hidden input to store and persist the selected service name -->
+                        <input type="hidden" name="service_name{{i}}" id="service-name-input-{{i}}" value="{{ cfg.sources[i].service_name }}">
+                        <select id="sid-select-{{i}}" onchange="selectService('{{i}}', this)" style="flex: 1; margin: 0;"></select>
+                    </div>
+                    
                     <div class="form-row" id="row-device-{{i}}" style="display:none;">
                         <label>Device:</label>
                         <select name="input_device{{i}}">
@@ -906,7 +953,7 @@
                             <div class="form-row"><label>Output Device:</label>
                                 <select name="audio_device">
                                     {% for dev in devices %}
-                                    <option value="{{ dev.id }}" {% if cfg.audio.output_device == dev.id %}selected{% endif %}>{{ dev.name }}</option>
+                                    <option value="{{ dev.name }}" {% if cfg.audio.output_device == dev.name or cfg.audio.output_device == dev.id %}selected{% endif %}>{{ dev.name }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
@@ -1045,9 +1092,13 @@
         let val = document.getElementById('sel-type-' + idx).value;
         document.getElementById('row-url-' + idx).style.display = 'none';
         document.getElementById('row-rtp-' + idx).style.display = 'none';
+        document.getElementById('row-multiplex-' + idx).style.display = 'none';
         document.getElementById('row-device-' + idx).style.display = 'none';
         document.getElementById('row-path-' + idx).style.display = 'none';
         document.getElementById('row-backup-dir-' + idx).style.display = 'none';
+        document.getElementById('row-sid-' + idx).style.display = 'none';
+        document.getElementById('row-pid-' + idx).style.display = 'none';
+        document.getElementById('row-sid-select-' + idx).style.display = 'none';
         document.getElementById('row-max-latency-' + idx).style.display = 'flex';
         document.getElementById('row-memorize-pos-' + idx).style.display = 'none';
         document.getElementById('meta-wrapper-' + idx).style.display = 'none';
@@ -1058,6 +1109,10 @@
             document.getElementById('meta-wrapper-' + idx).style.display = 'block';
         } else if (val === 'rtp_mpegts') {
             document.getElementById('row-rtp-' + idx).style.display = 'flex';
+        } else if (val === 'multiplex') {
+            document.getElementById('row-multiplex-' + idx).style.display = 'flex';
+            document.getElementById('row-sid-' + idx).style.display = 'flex';
+            document.getElementById('row-pid-' + idx).style.display = 'flex';
         } else if (val === 'rtp_sdp') {
             document.getElementById('row-path-' + idx).style.display = 'flex';
         } else if (val === 'device') {
@@ -1468,6 +1523,82 @@
             document.getElementById('next-page-btn').disabled = (data.page >= data.total_pages);
             currentLogPage = data.page; // Sync in case API corrected it
         });
+    }
+
+    // Define the function globally so it can be called by inline HTML onclick events
+    function scanPrograms(idx) {
+        let type = document.getElementById('sel-type-' + idx).value;
+        let url = "";
+        if (type === 'stream') {
+            url = document.querySelector(`input[name="url${idx}"]`).value;
+        } else if (type === 'rtp_mpegts') {
+            url = document.querySelector(`input[name="rtp_uri${idx}"]`).value;
+        } else if (type === 'multiplex') {
+            let ip = document.getElementById('sat-ip-' + idx).value;
+            let port = document.getElementById('sat-port-' + idx).value;
+            let src = document.getElementById('sat-src-' + idx).value;
+            let freq = document.getElementById('sat-freq-' + idx).value;
+            let pol = document.getElementById('sat-pol-' + idx).value;
+            let msys = document.getElementById('sat-msys-' + idx).value;
+            let sr = document.getElementById('sat-sr-' + idx).value;
+            
+            if (!ip) { alert("Please enter an IP Address first."); return; }
+            url = `rtsp://${ip}:${port}/?src=${src}&freq=${freq}&pol=${pol}&msys=${msys}&sr=${sr}&pids=all`;
+        }
+        
+        if(!url) { alert("Please enter a valid URL or URI first."); return; }
+        
+        let btn = document.getElementById('btn-scan-' + idx);
+        let originalText = btn.innerText;
+        btn.innerText = "Scanning...";
+        btn.disabled = true;
+        
+        let formData = new FormData();
+        formData.append("url", url);
+        
+        fetch('/probe_programs', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            btn.innerText = originalText;
+            btn.disabled = false;
+            if(data.status === 'ok') {
+                if(data.programs.length === 0) {
+                    alert("No specific programs/services found in this multiplex stream.");
+                    return;
+                }
+                let selRow = document.getElementById('row-sid-select-' + idx);
+                let sel = document.getElementById('sid-select-' + idx);
+                sel.innerHTML = '<option value="">-- Select a service --</option>';
+                data.programs.forEach(p => {
+                    let opt = document.createElement('option');
+                    opt.value = p.id;
+                    let tvPrefix = p.is_tv ? "[TV] " : "";
+                    // Display formatted SID
+                    opt.innerText = `${tvPrefix}${p.name} [SID ${p.id}]`;
+                    // Store clean service name inside a data attribute
+                    opt.dataset.cleanName = `${tvPrefix}${p.name}`;
+                    sel.appendChild(opt);
+                });
+                selRow.style.display = 'flex';
+            } else {
+                alert("Error scanning stream: " + data.message);
+            }
+        })
+        .catch(err => {
+            btn.innerText = originalText;
+            btn.disabled = false;
+            alert("Network error during scan.");
+        });
+    }
+
+    // Automatically assigns both the SID and the Service Name when picked from the dropdown
+    function selectService(idx, selElem) {
+        document.getElementById('sid-input-' + idx).value = selElem.value;
+        let selectedOpt = selElem.options[selElem.selectedIndex];
+        let nameInput = document.getElementById('service-name-input-' + idx);
+        if (nameInput) {
+            nameInput.value = selectedOpt.dataset.cleanName || '';
+        }
     }
 
     window.onload = function() {
