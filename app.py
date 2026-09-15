@@ -30,6 +30,11 @@ try:
 except ImportError:
     PSUTIL_AVAILABLE = False
 
+if getattr(sys, 'frozen', False):
+    os.chdir(os.path.dirname(sys.executable))
+else:
+    os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 # --- 1. CONFIGURATION & LOGGING ---
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -48,9 +53,9 @@ DEFAULT_CONFIG = {
     'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
-        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000},
-        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000}
+        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''},
+        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''},
+        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''}
     ],
     'settings': {
         'loss_threshold_db': -45.0,
@@ -131,12 +136,22 @@ def load_config():
                 if 'repeat' not in src: src['repeat'] = True
                 if 'max_latency_ms' not in src: src['max_latency_ms'] = 6000
                 if 'memorize_pos' not in src: src['memorize_pos'] = False
+                if 'sid' not in src: src['sid'] = src.get('program_id', '')
+                if 'service_name' not in src: src['service_name'] = ''
                 if 'meta_enabled' not in src: src['meta_enabled'] = False
                 if 'meta_path' not in src: src['meta_path'] = ''
                 if 'pre_buffer' in src: del src['pre_buffer']
                 if 'tone_wave' not in src: src['tone_wave'] = 'sine'
                 if 'tone_freq' not in src: src['tone_freq'] = 1000
                 if 'input_device' not in src: src['input_device'] = None
+                if 'sat_ip' not in src: src['sat_ip'] = ''
+                if 'sat_port' not in src: src['sat_port'] = 554
+                if 'sat_src' not in src: src['sat_src'] = 1
+                if 'sat_freq' not in src: src['sat_freq'] = 11515
+                if 'sat_pol' not in src: src['sat_pol'] = 'v'
+                if 'sat_msys' not in src: src['sat_msys'] = 'dvbs'
+                if 'sat_sr' not in src: src['sat_sr'] = 4000
+                if 'pid' not in src: src['pid'] = ''
                 if 'meta_normalize' not in src: src['meta_normalize'] = False
                 if 'meta_only_played' not in src: src['meta_only_played'] = False
                 if 'meta_uppercase' not in src: src['meta_uppercase'] = False
@@ -332,6 +347,7 @@ class SourceChannel:
         self.is_reconnecting = False
         self.last_vu = {'l': -60.0, 'r': -60.0}
         self.saved_positions = {}  # Tracks playback positions for local files
+        self.stream_title = ""     # Added for single-connection metadata extraction
 
     def start(self):
         if self.running: return
@@ -453,7 +469,7 @@ class SourceChannel:
 
         src = CONFIG['sources'][self.index]
         if src['type'] == 'stream' and not src['url']: return "NOT CONFIGURED", "#999"
-        if src['type'] == 'rtp_mpegts' and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
+        if src['type'] in ['rtp_mpegts', 'multiplex'] and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'rtp_sdp' and not src['path']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'rtp_sdp' and src['path'] and not os.path.exists(src['path']): return "FILE NOT FOUND", "#b00"
         if src['type'] == 'device' and src.get('input_device') is None: return "NOT CONFIGURED", "#999"
@@ -608,11 +624,10 @@ class SourceChannel:
                             self.playlist_idx += 1
                     else:
                         self.status_text = "FILE ERROR"
-            elif src['type'] == 'rtp_mpegts':
+            elif src['type'] in ['rtp_mpegts', 'multiplex']:
                 if src['rtp_uri']:
                     valid = True
-                    # Removed invalid -buffer_size to prevent crash, added low_delay
-                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer', '-flags', 'low_delay', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '1000000', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
                 else:
                     self.status_text = "NO CONFIG"
             elif src['type'] == 'rtp_sdp':
@@ -633,10 +648,12 @@ class SourceChannel:
             else: # stream
                 if src['url']:
                     valid = True
-                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', 
+                    # Passage en loglevel "debug" pour forcer FFmpeg à cracher les mises à jour ICY cachées
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats',
                            '-fflags', 'nobuffer', '-flags', 'low_delay',
                            '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
                            '-rw_timeout', rw_timeout,
+                           '-user_agent', 'VLC/3.0.0', '-icy', '1',
                            '-i', src['url']] + filter_arg
                 else:
                     self.status_text = "NO CONFIG"
@@ -645,14 +662,47 @@ class SourceChannel:
                 time.sleep(1)
                 continue
 
-            cmd.extend(['-f', 's16le', '-ac', str(CHANNELS), '-ar', str(SAMPLE_RATE), '-acodec', 'pcm_s16le', 'pipe:1'])
+            # Map specific service if it's a multiplexed stream (like SAT>IP)
+            map_arg = []
+            if src['type'] in ['rtp_mpegts', 'multiplex']:
+                if src.get('pid'):
+                    map_arg = ['-map', f"0:i:{src['pid']}"]
+                elif src.get('sid'):
+                    map_arg = ['-map', f"0:p:{src['sid']}:a:0"]
+
+            cmd.extend(map_arg + ['-f', 's16le', '-ac', str(CHANNELS), '-ar', str(SAMPLE_RATE), '-acodec', 'pcm_s16le', 'pipe:1'])
             self.status_text = "BUFFERING"
 
             try:
                 if sys.platform == "win32":
-                    self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+                    self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
                 else:
-                    self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)
+                    self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+                
+                # Start stderr reader to prevent pipe blocking and extract metadata
+                def stderr_reader(proc, channel):
+                    while proc and proc.poll() is None:
+                        try:
+                            line = proc.stderr.readline()
+                            if not line: break
+                            line_str = line.decode('utf-8', errors='ignore')
+                            
+                            if "streamtitle" in line_str.lower():
+                                m1 = re.search(r"StreamTitle\s*=\s*['\"]?(.*?)['\"]?(?:;|$)", line_str, re.IGNORECASE)
+                                m2 = re.search(r"StreamTitle\s*:\s*(.*)", line_str, re.IGNORECASE)
+                                
+                                val = None
+                                if m1:
+                                    val = m1.group(1).strip()
+                                elif m2:
+                                    val = m2.group(1).strip()
+                                    
+                                if val:
+                                    channel.stream_title = val
+                        except:
+                            pass
+                
+                threading.Thread(target=stderr_reader, args=(self.process, self), daemon=True).start()
                 
                 time.sleep(0.5)
                 if self.process.poll() is not None:
@@ -808,8 +858,25 @@ class BroadcastEngine:
     def start_audio_stream(self):
         try:
             device = CONFIG['audio']['output_device']
-            if device is not None: device = int(device)
-            else: device = sd.default.device[1]
+            if device is not None:
+                try:
+                    if isinstance(device, int) or (isinstance(device, str) and device.isdigit()):
+                        device = int(device)
+                    else:
+                        target_id = None
+                        query = sd.query_devices()
+                        host_apis = sd.query_hostapis()
+                        for i, d in enumerate(query):
+                            api_name = host_apis[d['hostapi']]['name']
+                            dev_name = f"[{api_name}] {d['name']}"
+                            if dev_name == device:
+                                target_id = i
+                                break
+                        device = target_id if target_id is not None else sd.default.device[1]
+                except:
+                    device = sd.default.device[1]
+            else:
+                device = sd.default.device[1]
 
             # Build Stream arguments dynamically to prevent parameter rejection
             stream_kwargs = {
@@ -863,29 +930,30 @@ class BroadcastEngine:
             add_internal_log(f"Audio Output Error: {str(e)}", "ERROR")
             logging.error(f"Audio Output Error: {e}")
 
-    def restart_engine(self):
+    def restart_engine(self, hardware_changed=True):
         # ID change to invalidate and force the termination of old threads
         self.run_id = time.time() 
         
         for ch in self.channels: ch.stop()
-        if self.stream: 
-            try: self.stream.stop() # Cleanly wait for audio buffers to finish, prevents WASAPI zombie states
-            except: pass
-            
-            try: self.stream.close() # Release the hardware endpoint
-            except: pass
-            
-            self.stream = None
         
-        gc.collect()
-
-        time.sleep(1.5)
-        
-        try:
-            sd._terminate()
-            sd._initialize()
-        except:
-            pass
+        if hardware_changed:
+            if self.stream: 
+                try: self.stream.stop() # Cleanly wait for audio buffers to finish, prevents WASAPI zombie states
+                except: pass
+                
+                try: self.stream.close() # Release the hardware endpoint
+                except: pass
+                
+                self.stream = None
+            
+            gc.collect()
+            time.sleep(1.5)
+            
+            try:
+                sd._terminate()
+                sd._initialize()
+            except:
+                pass
             
         self.channels = [SourceChannel(i) for i in range(3)]
         
@@ -906,7 +974,8 @@ class BroadcastEngine:
         self.t_meta = threading.Thread(target=self._meta_loop, args=(self.run_id,), daemon=True)
         self.t_meta.start()
         
-        self.start_audio_stream()
+        if hardware_changed:
+            self.start_audio_stream()
         add_internal_log("Audio engine restarted.", "SYSTEM")
 
     def _meta_loop(self, current_run_id):
@@ -923,22 +992,10 @@ class BroadcastEngine:
                 
                 # Check stream URL first
                 if src['type'] == 'stream' and src['url']:
-                    is_active = (i == self.current_source_idx)
-                    # Smart polling: 5s for the actively playing stream, 20s for inactive backups
-                    poll_interval = 5 if is_active else 20
-                    
-                    if now - last_stream_poll[i] >= poll_interval:
-                        try:
-                            extracted = extract_stream_title(src['url'])
-                        except:
-                            extracted = None
-                        last_stream_poll[i] = now
-                        
-                        if extracted is not None:
-                            title = extracted
-                            raw_titles[i] = extracted
-                        else:
-                            title = raw_titles[i] # Keeps the previous song name in case of a network failure
+                    extracted = self.channels[i].stream_title
+                    if extracted:
+                        title = extracted
+                        raw_titles[i] = extracted
                     else:
                         title = raw_titles[i]
                 elif src['type'] == 'file' and src['path']:
@@ -959,6 +1016,19 @@ class BroadcastEngine:
                     raw_titles[i] = title
                 elif src['type'] == 'device':
                     title = "Audio Input Device"
+                    raw_titles[i] = title
+                elif src['type'] == 'multiplex':
+                    # Format multiplex metadata with service name and SID (Service ID)
+                    s_name = src.get('service_name', '')
+                    sid = src.get('sid', '')
+                    if s_name and sid:
+                        title = f"{s_name} [SID {sid}]"
+                    elif sid:
+                        title = f"SID {sid}"
+                    elif s_name:
+                        title = s_name
+                    else:
+                        title = ""
                     raw_titles[i] = title
                 else:
                     raw_titles[i] = ""
@@ -994,18 +1064,31 @@ class BroadcastEngine:
                             else:
                                 final_title = f"\\+Ar{parts[0]}\\-{separator}\\+Ti{parts[1]}\\-"
 
+                    export_method = src.get('meta_export_method', 'file')
+                    target_file = src.get('meta_path', '')
+                    
+                    if export_method == 'file' and target_file:
+                        if not os.path.isabs(target_file):
+                            if getattr(sys, 'frozen', False):
+                                base_dir = os.path.dirname(sys.executable)
+                            else:
+                                base_dir = os.path.dirname(os.path.abspath(__file__))
+                            target_file = os.path.join(base_dir, target_file)
+
+                    if export_method == 'file' and target_file and (final_title != last_titles[i] or not os.path.exists(target_file)):
+                        try:
+                            dir_name = os.path.dirname(target_file)
+                            if dir_name:
+                                os.makedirs(dir_name, exist_ok=True)
+                            with open(target_file, 'w', encoding='utf-8-sig') as f:
+                                f.write(final_title)
+                        except Exception as e:
+                            add_internal_log(f"Metadata file export error: {str(e)}", "ERROR")
+
                     if final_title != last_titles[i]:
                         last_titles[i] = final_title
                         
-                        export_method = src.get('meta_export_method', 'file')
-                        
-                        if export_method == 'file' and src.get('meta_path'):
-                            try:
-                                with open(src['meta_path'], 'w', encoding='utf-8-sig') as f:
-                                    f.write(final_title)
-                            except: pass
-                            
-                        elif export_method == 'tcp':
+                        if export_method == 'tcp':
                             tcp_ip = src.get('meta_tcp_ip', '127.0.0.1')
                             tcp_port = int(src.get('meta_tcp_port', 4001))
                             try:
@@ -1102,7 +1185,7 @@ class BroadcastEngine:
                 # 1. Start / Stop managmeent
                 should_run = False
                 if src_cfg['type'] == 'stream': should_run = True
-                elif src_cfg['type'] in ['rtp_mpegts', 'rtp_sdp']: should_run = True 
+                elif src_cfg['type'] in ['rtp_mpegts', 'rtp_sdp', 'multiplex']: should_run = True 
                 elif src_cfg['type'] == 'tone': should_run = True
                 elif src_cfg['type'] == 'device': should_run = True
                 elif src_cfg['type'] in ['file', 'backup_dir']: 
@@ -1115,7 +1198,7 @@ class BroadcastEngine:
                         if src_cfg.get('backup_mode', 'single') == 'single' and not src_cfg.get('backup_file'): should_run = False
                         if src_cfg.get('backup_mode', 'single') == 'playlist' and not src_cfg.get('backup_playlist_name'): should_run = False
                     if src_cfg['type'] == 'stream' and not src_cfg['url']: should_run = False
-                    if src_cfg['type'] == 'rtp_mpegts' and not src_cfg['rtp_uri']: should_run = False
+                    if src_cfg['type'] in ['rtp_mpegts', 'multiplex'] and not src_cfg['rtp_uri']: should_run = False
                     if src_cfg['type'] == 'device' and src_cfg.get('input_device') is None: should_run = False
 
                 if should_run and not ch.running: ch.start()
@@ -1253,7 +1336,7 @@ class BroadcastEngine:
                            s = CONFIG['sources'][candidate_idx]
                            is_conf = False
                            if s['type'] == 'stream' and s['url']: is_conf = True
-                           elif s['type'] == 'rtp_mpegts' and s['rtp_uri']: is_conf = True
+                           elif s['type'] in ['rtp_mpegts', 'multiplex'] and s['rtp_uri']: is_conf = True
                            elif s['type'] == 'rtp_sdp' and s['path'] and os.path.exists(s['path']): is_conf = True
                            elif s['type'] == 'file' and s['path']: is_conf = True
                            elif s['type'] == 'backup_dir':
@@ -1432,17 +1515,19 @@ def index():
     if request.method == 'POST':
         try:
             needs_restart = False
-            
-            new_dev = int(request.form.get('audio_device'))
-            new_latency = int(float(request.form.get('out_latency', 1000)))
-            
-            # Forcing engine restart in case of a major change in the configuration
-            if CONFIG['audio']['output_device'] != new_dev or CONFIG['audio'].get('output_latency_ms') != new_latency:
-                needs_restart = True
+            needs_hardware_restart = False
                 
+            new_dev = request.form.get('audio_device')
+            new_latency = int(float(request.form.get('out_latency', 1000)))
+                
+            # Forcing engine restart in case of a major change in the configuration
+            if str(CONFIG['audio'].get('output_device')) != str(new_dev) or CONFIG['audio'].get('output_latency_ms') != new_latency:
+                needs_hardware_restart = True
+                needs_restart = True
+                    
             CONFIG['audio']['output_device'] = new_dev
             CONFIG['audio']['output_latency_ms'] = new_latency
-            
+                
             CONFIG['audio']['output_gain_db'] = float(request.form.get('out_gain', 0))
             CONFIG['settings']['loss_threshold_db'] = float(request.form.get('loss_thresh'))
             CONFIG['settings']['loss_timeout_sec'] = int(float(request.form.get('loss_time', 10)))
@@ -1460,12 +1545,27 @@ def index():
                 new_playlist_shuffle = (request.form.get(f'backup_playlist_shuffle{i}') == 'on')
                 new_memorize_pos = (request.form.get(f'memorize_pos{i}') == 'on')
                 new_max_latency = int(request.form.get(f'max_latency_ms{i}', 6000))
+                new_sid = request.form.get(f'sid{i}', '')
+                new_pid = request.form.get(f'pid{i}', '')
+                new_service_name = request.form.get(f'service_name{i}', '')
                 new_in_dev = request.form.get(f'input_device{i}')
+                
+                new_sat_ip = request.form.get(f'sat_ip{i}', '')
+                new_sat_port = int(request.form.get(f'sat_port{i}', 554))
+                new_sat_src = int(request.form.get(f'sat_src{i}', 1))
+                new_sat_freq = int(request.form.get(f'sat_freq{i}', 11515))
+                new_sat_pol = request.form.get(f'sat_pol{i}', 'v')
+                new_sat_msys = request.form.get(f'sat_msys{i}', 'dvbs')
+                new_sat_sr = int(request.form.get(f'sat_sr{i}', 4000))
+                
+                if new_type == 'multiplex':
+                    new_uri = f"rtsp://{new_sat_ip}:{new_sat_port}/?src={new_sat_src}&freq={new_sat_freq}&pol={new_sat_pol}&msys={new_sat_msys}&sr={new_sat_sr}&pids=all"
                 
                 src = CONFIG['sources'][i]
                 src['input_device'] = int(new_in_dev) if (new_in_dev and new_in_dev != 'None') else None
                 
-                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('max_latency_ms') != new_max_latency or
+                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('max_latency_ms') != new_max_latency or src.get('sid') != new_sid or src.get('pid') != new_pid or
+                    src.get('sat_ip') != new_sat_ip or src.get('sat_port') != new_sat_port or src.get('sat_src') != new_sat_src or src.get('sat_freq') != new_sat_freq or src.get('sat_pol') != new_sat_pol or src.get('sat_msys') != new_sat_msys or src.get('sat_sr') != new_sat_sr or
                     src.get('meta_export_method') != request.form.get(f'meta_export_method{i}', 'file') or
                     src.get('meta_tcp_ip') != request.form.get(f'meta_tcp_ip{i}', '127.0.0.1') or
                     str(src.get('meta_tcp_port', 4001)) != request.form.get(f'meta_tcp_port{i}', '4001') or
@@ -1476,13 +1576,22 @@ def index():
                 src['type'] = new_type
                 src['url'] = new_url
                 src['rtp_uri'] = new_uri
-                src['path'] = new_path
+                src['sat_ip'] = new_sat_ip
+                src['sat_port'] = new_sat_port
+                src['sat_src'] = new_sat_src
+                src['sat_freq'] = new_sat_freq
+                src['sat_pol'] = new_sat_pol
+                src['sat_msys'] = new_sat_msys
+                src['sat_sr'] = new_sat_sr
                 src['backup_file'] = new_backup_file
                 src['backup_mode'] = new_backup_mode
                 src['backup_playlist_name'] = new_playlist_name
                 src['backup_playlist_shuffle'] = new_playlist_shuffle
                 src['memorize_pos'] = new_memorize_pos
                 src['max_latency_ms'] = new_max_latency
+                src['sid'] = new_sid
+                src['pid'] = new_pid
+                src['service_name'] = new_service_name
                 
                 if new_type in ['file', 'backup_dir']:
                     src['repeat'] = True
@@ -1522,7 +1631,7 @@ def index():
             save_config(CONFIG)
             
             if needs_restart:
-                engine.restart_engine()
+                engine.restart_engine(hardware_changed=needs_hardware_restart)
         except Exception as e:
             add_internal_log(f"Config POST Error: {str(e)}", "ERROR")
             logging.error(f"POST Error: {e}")
@@ -1545,6 +1654,42 @@ def index():
     
     audio_files = get_audio_files_info()
     return render_template('index.html', login_needed=False, cfg=safe_cfg, devices=devs, in_devices=in_devs, audio_files=audio_files)
+
+@app.route('/probe_programs', methods=['POST'])
+def probe_programs():
+    if not session.get('logged_in'): return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+    url = request.form.get('url')
+    if not url: return jsonify({'status': 'error', 'message': 'No URL/URI provided'})
+    try:
+        if getattr(sys, 'frozen', False): base_path = os.path.dirname(sys.executable)
+        else: base_path = os.path.dirname(os.path.abspath(__file__))
+        exe_name = 'ffprobe.exe' if sys.platform == 'win32' else 'ffprobe'
+        ffprobe_path = os.path.join(base_path, exe_name)
+
+        # Uses FFprobe to read the multiplex table and extract specific program IDs and names
+        cmd = [ffprobe_path, '-v', 'quiet', '-print_format', 'json', '-show_programs', '-analyzeduration', '5000000', '-probesize', '5000000', url]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        out, _ = proc.communicate(timeout=15)
+        data = json.loads(out)
+
+        programs = []
+        for p in data.get('programs', []):
+            sid = p.get('program_id')
+            tags = p.get('tags', {})
+            name = tags.get('service_name') or tags.get('SERVICE_NAME') or f"Service {sid}"
+            
+            # Detect if it's a TV service by checking if any associated stream is a video codec
+            is_tv = False
+            for s in p.get('streams', []):
+                if s.get('codec_type') == 'video':
+                    is_tv = True
+                    break
+            
+            programs.append({'id': sid, 'name': name, 'is_tv': is_tv})
+
+        return jsonify({'status': 'ok', 'programs': programs})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)})
 
 @app.route('/upload_audio', methods=['POST'])
 def upload_audio():
@@ -1614,7 +1759,7 @@ def update_fm():
         CONFIG['fm']['tone_freq'] = int(request.form.get('tone_freq', 1000))
         CONFIG['fm']['tone_gain'] = float(request.form.get('tone_gain', -10.0))
         save_config(CONFIG)
-        engine.restart_engine()
+        engine.restart_engine(hardware_changed=False)
         add_internal_log("FM/Tone settings updated.", "INFO")
         return redirect(url_for('index'))
     except: return "Error"
@@ -1813,7 +1958,7 @@ def set_mode():
             s = CONFIG['sources'][i]
             is_conf = False
             if s['type'] == 'stream' and s['url']: is_conf = True
-            elif s['type'] == 'rtp_mpegts' and s['rtp_uri']: is_conf = True
+            elif s['type'] in ['rtp_mpegts', 'multiplex'] and s['rtp_uri']: is_conf = True
             elif s['type'] == 'rtp_sdp' and s['path'] and os.path.exists(s['path']): is_conf = True
             elif s['type'] == 'file' and s['path'] and os.path.exists(s['path']): is_conf = True
             elif s['type'] == 'backup_dir':
@@ -1993,7 +2138,15 @@ def socket_emit_loop():
                 else: np_str = "Now playing: ..."
             elif src['type'] == 'rtp_mpegts':
                 if src['rtp_uri']:
-                    np_str = f"Now playing: {src['rtp_uri']} (MPEG-TS)"
+                    # Format Now Playing string to include the service name and SID if available
+                    if engine.current_metadata_title:
+                        np_str = f"Now playing: {src['rtp_uri']} (MPEG-TS - {engine.current_metadata_title})"
+                    else:
+                        np_str = f"Now playing: {src['rtp_uri']} (MPEG-TS)"
+                else: np_str = "Now playing: ..."
+            elif src['type'] == 'multiplex':
+                if src['rtp_uri']:
+                    np_str = f"Now playing: {src['rtp_uri']} (SAT>IP / MPEG-TS)"
                 else: np_str = "Now playing: ..."
             elif src['type'] == 'rtp_sdp':
                 if src['path']:
