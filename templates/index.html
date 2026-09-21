@@ -538,6 +538,154 @@
         <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('upload-modal').style.display='none'" style="margin-top: 20px;">Close</button>
     </div>
 </div>
+
+<div id="scheduler-modal" class="modal">
+    <style>
+        #scheduler-modal .sch-day-label {
+            display: inline-flex; align-items: center; background: #fff; border: 1px solid #cbd5e1; 
+            padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 0.85rem;
+            color: #475569; user-select: none; margin: 0; transition: all 0.2s; font-weight: normal;
+        }
+        #scheduler-modal .sch-day-label:hover { background: #f1f5f9; border-color: #94a3b8; }
+        #scheduler-modal .sch-day-label input[type="checkbox"] { 
+            margin: 0 8px 0 0 !important; cursor: pointer; width: auto !important; display: inline-block !important;
+        }
+        #scheduler-modal .sch-clean-input {
+            width: 100% !important; margin: 0 !important; 
+            padding: 0 10px !important; border: 1px solid #ccc !important; 
+            border-radius: 4px !important; height: 36px !important; box-sizing: border-box !important;
+            font-family: inherit; font-size: 0.9rem; background: #fff;
+        }
+        #scheduler-modal .sch-btn {
+            height: 36px !important; padding: 0 16px !important; border: none !important; 
+            border-radius: 4px !important; font-weight: bold !important; cursor: pointer !important; 
+            font-size: 0.9rem !important; margin: 0 !important; line-height: 36px !important;
+            display: inline-block !important; box-sizing: border-box !important; text-align: center;
+        }
+    </style>
+    <div class="modal-box" style="width: 900px; max-width: 95%;">
+        <h2 style="margin-bottom: 20px;">Scheduler (Planned Events)</h2>
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #ddd; margin-bottom:15px;">
+            <div style="display:flex; gap:10px; align-items:center;">
+                <select id="sch-select" onchange="schSelect()" class="sch-clean-input" style="flex:1;">
+                    <option value="">-- No schedule available. Please create one. --</option>
+                </select>
+                <button type="button" class="btn-sec sch-btn" onclick="schNew()" style="color:black; border-color:#ccc; background:#eee; border:1px solid #ccc !important;">Create New Schedule</button>
+                <button type="button" class="btn-sec sch-btn" onclick="schDelete()" style="color:white; background:var(--danger);">Delete</button>
+            </div>
+        </div>
+        
+        <div id="sch-editor" style="display:none; text-align: left;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:20px;">
+                <label style="font-weight:bold; color:#334155; width:50px; margin:0;">Name:</label>
+                <input type="text" id="sch-name" class="sch-clean-input" style="flex:1;">
+            </div>
+            
+            <div style="margin-top:15px; border-top:1px solid #e2e8f0; padding-top:20px;">
+                <h3 style="font-size:1.1rem; color:var(--blue); margin-top:0; margin-bottom:15px;">Create / Modify events for this schedule</h3>
+                
+                <div style="background: #f8fafc; padding: 15px; border-radius: 5px; border: 1px solid #e2e8f0; margin-bottom: 15px;">
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                        <div style="font-weight: bold; font-size: 0.95rem; color: #334155;">Days</div>
+                        <button type="button" class="btn-sec" onclick="schToggleAllDays()" style="font-size: 0.8rem; padding: 4px 10px; margin: 0; background: #e2e8f0; color: #334155; border: 1px solid #cbd5e1; border-radius: 4px;">Toggle All Days</button>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;">
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Monday"> Monday</label>
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Tuesday"> Tuesday</label>
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Wednesday"> Wednesday</label>
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Thursday"> Thursday</label>
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Friday"> Friday</label>
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Saturday"> Saturday</label>
+                        <label class="sch-day-label"><input type="checkbox" class="sch-day-chk" value="Sunday"> Sunday</label>
+                    </div>
+
+                    <div style="display: flex; gap: 15px; align-items: flex-start; flex-wrap: wrap;">
+                        <div style="width: 110px;">
+                            <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #334155; margin-bottom: 6px;">Time</label>
+                            <input type="time" id="sch-time" class="sch-clean-input" required>
+                        </div>
+                        
+                        <div style="width: 220px;">
+                            <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #334155; margin-bottom: 6px;">Source Type</label>
+                            <select id="sch-target-type" onchange="schToggleTargetInput()" class="sch-clean-input">
+                                <option value="url">IP Stream (HTTP / HTTPS)</option>
+                                <option value="rtp_mpegts">RTP Stream (Via MPEG-TS)</option>
+                                <option value="rtp_sdp">RTP Stream (Via SDP File)</option>
+                                <option value="satip">Satellite Stream (SAT&gt;IP)</option>
+                                <option value="device">Audio Input Device</option>
+                                <option value="file">Local File</option>
+                                <option value="backup_file">Uploaded File</option>
+                                <option value="playlist">Playlist</option>
+                                <option value="tone">Test Tone Generator</option>
+                            </select>
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 280px;">
+                            <label style="display: block; font-weight: bold; font-size: 0.9rem; color: #334155; margin-bottom: 6px;">Action / Source Details</label>
+                            <input type="text" id="sch-target-text" class="sch-clean-input">
+                            <select id="sch-target-file" class="sch-clean-input" style="display: none;">
+                                <option value="">-- Select File --</option>
+                                {% for af in audio_files %}
+                                <option value="backup_file:{{ af.name }}">{{ af.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <select id="sch-target-playlist" class="sch-clean-input" style="display: none;">
+                                <option value="">-- Select Playlist --</option>
+                                {% for pname in cfg.playlists.keys() %}
+                                <option value="playlist:{{ pname }}">{{ pname }}</option>
+                                {% endfor %}
+                            </select>
+                            <select id="sch-target-device" class="sch-clean-input" style="display: none;">
+                                <option value="">-- Select Device --</option>
+                                {% for dev in in_devices %}
+                                <option value="{{ dev.id }}">{{ dev.name }}</option>
+                                {% endfor %}
+                            </select>
+                            
+                            <div id="sch-target-satip" style="display: none; flex-direction: column; gap: 6px;">
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="text" id="sch-sat-ip" placeholder="IP Address" class="sch-clean-input" style="flex: 2;">
+                                    <input type="number" id="sch-sat-port" placeholder="Port" value="554" class="sch-clean-input" style="flex: 1;">
+                                    <select id="sch-sat-src" class="sch-clean-input" style="flex: 1;"><option value="1">Src 1</option><option value="2">Src 2</option></select>
+                                </div>
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="number" id="sch-sat-freq" placeholder="Freq" value="11515" class="sch-clean-input" style="flex: 2;">
+                                    <select id="sch-sat-pol" class="sch-clean-input" style="flex: 1;"><option value="v">V</option><option value="h">H</option></select>
+                                    <select id="sch-sat-msys" class="sch-clean-input" style="flex: 1.4;"><option value="dvbs">DVB-S</option><option value="dvbs2">DVB-S2</option></select>
+                                    <input type="number" id="sch-sat-sr" placeholder="SR" value="4000" class="sch-clean-input" style="flex: 2;">
+                                </div>
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="text" id="sch-sat-sid" placeholder="SID (Leave blank for none)" class="sch-clean-input" style="flex: 1;">
+                                    <input type="text" id="sch-sat-pid" placeholder="PID (Leave blank for none)" class="sch-clean-input" style="flex: 1;">
+                                </div>
+                            </div>
+                            
+                            <div id="sch-target-tone" style="display: none; gap: 6px;">
+                                <input type="number" id="sch-tone-freq" placeholder="Frequency (Hz)" value="1000" class="sch-clean-input" style="flex: 1;">
+                                <select id="sch-tone-wave" class="sch-clean-input" style="flex: 1;">
+                                    <option value="sine">Sine</option>
+                                    <option value="square">Square</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label style="display: block; font-size: 0.9rem; margin-bottom: 6px;">&nbsp;</label>
+                            <button type="button" class="sch-btn" onclick="schAddEvent()" style="background: var(--success); color: white;">Add Event</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="sch-list" style="border:1px solid #cbd5e1; background:#fff; height:240px; overflow-y:auto; margin-bottom:20px; border-radius:4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);"></div>
+            </div>
+            
+            <button type="button" class="modal-btn btn-blue" onclick="schSave()" style="margin-top:0;">Save Schedule</button>
+        </div>
+        <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('scheduler-modal').style.display='none'" style="margin-top: 10px;">Close</button>
+    </div>
+</div>
 {% endif %}
 
 {% if not login_needed or not cfg.server.hide_bg_on_login %}
@@ -571,6 +719,9 @@
                 {% endif %}
                 {% if session.role == 'admin' or cfg.server.op_backup_access %}
                 <button onclick="document.getElementById('upload-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Backup Audio Files</button>
+                {% endif %}
+                {% if session.role == 'admin' %}
+                <button onclick="document.getElementById('scheduler-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Scheduler</button>
                 {% endif %}
                 <button onclick="document.getElementById('analysis-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Audio Analysis</button>
                 {% if session.role == 'admin' %}
@@ -721,6 +872,7 @@
                             <option value="device" {% if cfg.sources[i].type == 'device' %}selected{% endif %}>Audio Input Device</option>
                             <option value="file" {% if cfg.sources[i].type == 'file' %}selected{% endif %}>Local File</option>
                             <option value="backup_dir" {% if cfg.sources[i].type == 'backup_dir' %}selected{% endif %}>Backup Audio Directory</option>
+                            <option value="scheduler" {% if cfg.sources[i].type == 'scheduler' %}selected{% endif %}>Scheduler (Planned Events)</option>
                             <option value="tone" {% if cfg.sources[i].type == 'tone' %}selected{% endif %}>Test Tone Generator</option>
                         </select>
                     </div>
@@ -761,7 +913,7 @@
                     </div>
                     
                     <div class="form-row" id="row-pid-{{i}}" style="display:none; margin-top:-5px; padding-bottom:5px;">
-                        <label style="color: #666; font-size: 0.85rem;">...or Audio Packet ID (PID):</label>
+                        <label style="color: #666; font-size: 0.85rem;">...or Audio PID:</label>
                         <input type="text" name="pid{{i}}" value="{{ cfg.sources[i].pid }}" style="margin: 0;" placeholder="(Overrides SID if used)">
                     </div>
                     
@@ -824,6 +976,15 @@
                             <label>Shuffle Playlist:</label>
                             <input type="checkbox" name="backup_playlist_shuffle{{i}}" {% if cfg.sources[i].backup_playlist_shuffle %}checked{% endif %} style="flex: 0; width: auto !important; margin: 0;">
                         </div>
+                    </div>
+                    <div class="form-row" id="row-scheduler-{{i}}" style="display:none;">
+                        <label>Schedule:</label>
+                        <select name="schedule_name{{i}}" id="sel-scheduler-name-{{i}}">
+                            <option value="">-- Select a schedule --</option>
+                            {% for sname in cfg.schedules.keys() %}
+                            <option value="{{ sname }}" {% if cfg.sources[i].schedule_name == sname %}selected{% endif %}>{{ sname }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="form-row" id="row-memorize-pos-{{i}}" style="display:none;">
                         <label style="flex: 0 0 250px;">Memorize playback position:<span class="info-icon-blue" data-tooltip="When this function is enabled, audio playback will resume exactly where it last stopped.">i</span></label>
@@ -959,27 +1120,31 @@
                             </div>
                             <div class="form-row"><label>Output Gain (dB):</label><input type="number" step="0.1" name="out_gain" value="{{ cfg.audio.output_gain_db }}"></div>
                             <div class="form-row">
-                                <label>Output Buffer (ms):<span class="info-icon-blue" data-tooltip="Increase this value (only) if you hear crackling or micro-cuts in the output.&#10;&#10;Default value: 1000">i</span></label>
+                                <label>Output Buffer (ms):<span class="info-icon-blue" data-tooltip="Increase this value if you hear crackling or micro-cuts in the output.&#10;&#10;You can also modify it to synchronize your output with another one.&#10;&#10;Default value: 1000">i</span></label>
                                 <input type="number" step="1" name="out_latency" value="{{ cfg.audio.output_latency_ms }}">
                             </div>
                         </div>
                         <div style="flex:1; min-width:300px; padding-left:20px; border-left:1px solid #eee;">
                             <div class="form-row">
-                                <label>Loss Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is below this value, the source is considered silent.&#10;&#10;Default value: -45.0">i</span></label>
+                                <label style="flex: 0 0 250px;">Audio Loss Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is below this value, the source is considered silent.&#10;&#10;A value that is too high (too close to 0) can result in incorrect silence detection.&#10;&#10;Default value: -45.0&#10;(Recommended for most use cases)">i</span></label>
                                 <input type="number" step="0.1" name="loss_thresh" value="{{ cfg.settings.loss_threshold_db }}">
                             </div>
                             <div class="form-row">
-                                <label>Loss Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch to a backup source when silence is detected.&#10;&#10;Default value: 10">i</span></label>
+                                <label style="flex: 0 0 250px;">Audio Loss Timeout (sec.):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch to a backup source when silence is detected.&#10;&#10;Default value: 10">i</span></label>
                                 <input type="number" step="1" name="loss_time" value="{{ cfg.settings.loss_timeout_sec | int }}">
+                            </div>
+                            <div class="form-row" style="margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 15px;">
+                                <label style="flex: 0 0 250px;">Connection Loss Timeout (sec.):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch to a backup source when the connection to a stream is lost.&#10;&#10;A high value can be useful if your Internet connection is prone to recurrent instability.&#10;&#10;Once the connection is re-established, the switch back to the original source will be determined based on the 'Audio Recovery Timeout' value.&#10;&#10;Default value: 5">i</span></label>
+                                <input type="number" step="1" name="unreachable_timeout_sec" value="{{ cfg.settings.unreachable_timeout_sec | default(5) | int }}">
                             </div>
                         </div>
                         <div style="flex:1; min-width:300px; padding-left:20px; border-left:1px solid #eee;">
                             <div class="form-row">
-                                <label>Recovery Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is above this value, the source is considered to be functional again.&#10;&#10;Default value: -35.0">i</span></label>
+                                <label style="flex: 0 0 250px;">Audio Recovery Threshold (dB):<span class="info-icon-blue" data-tooltip="When the input level is above this value, the source is considered to be functional again.&#10;&#10;A value that is too low (too close to -60) can result in false recovery detections.&#10;&#10;Default value: -35.0&#10;(Recommended for most use cases)">i</span></label>
                                 <input type="number" step="0.1" name="rec_thresh" value="{{ cfg.settings.recovery_threshold_db }}">
                             </div>
                             <div class="form-row">
-                                <label>Recovery Timeout (s):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch back to the source that was considered silent.&#10;&#10;Default value: 5">i</span></label>
+                                <label style="flex: 0 0 250px;">Audio Recovery Timeout (sec.):<span class="info-icon-blue" data-tooltip="Number of seconds before the decoder decides to switch back to the source that was considered silent.&#10;&#10;Default value: 5">i</span></label>
                                 <input type="number" step="1" name="rec_time" value="{{ cfg.settings.recovery_timeout_sec | int }}">
                             </div>
                         </div>
@@ -1096,6 +1261,7 @@
         document.getElementById('row-device-' + idx).style.display = 'none';
         document.getElementById('row-path-' + idx).style.display = 'none';
         document.getElementById('row-backup-dir-' + idx).style.display = 'none';
+        document.getElementById('row-scheduler-' + idx).style.display = 'none';
         document.getElementById('row-sid-' + idx).style.display = 'none';
         document.getElementById('row-pid-' + idx).style.display = 'none';
         document.getElementById('row-sid-select-' + idx).style.display = 'none';
@@ -1124,6 +1290,10 @@
             document.getElementById('row-backup-dir-' + idx).style.display = 'flex';
             document.getElementById('row-max-latency-' + idx).style.display = 'none';
             document.getElementById('row-memorize-pos-' + idx).style.display = 'flex';
+        } else if (val === 'scheduler') {
+            document.getElementById('row-scheduler-' + idx).style.display = 'flex';
+            document.getElementById('row-max-latency-' + idx).style.display = 'flex';
+            document.getElementById('row-memorize-pos-' + idx).style.display = 'none';
         } else { // file
             document.getElementById('row-path-' + idx).style.display = 'flex';
             document.getElementById('row-max-latency-' + idx).style.display = 'none';
@@ -1317,6 +1487,305 @@
             body: JSON.stringify({playlists: globalPlaylists})
         }).then(r => r.json()).then(d => {
             pmUpdateSelects();
+        });
+    }
+    
+    let globalSchedules = JSON.parse('{{ cfg.schedules | default({}) | tojson | safe }}');
+    let schCurrentEdit = null;
+    let schCurrentEvents = [];
+
+    function schUpdateSelects() {
+        let sel = document.getElementById('sch-select');
+        let curSel = schCurrentEdit !== null ? schCurrentEdit : sel.value;
+        sel.innerHTML = '';
+        
+        if (Object.keys(globalSchedules).length === 0) {
+            sel.innerHTML = '<option value="">-- No schedule available. Please create one. --</option>';
+            document.getElementById('sch-editor').style.display = 'none';
+        } else {
+            let matchFound = false;
+            for(let s in globalSchedules) {
+                let opt = document.createElement('option');
+                opt.value = s; opt.innerText = s;
+                if(s === curSel) { opt.selected = true; matchFound = true; }
+                sel.appendChild(opt);
+            }
+            if (!matchFound) {
+                if (schCurrentEdit === "") sel.selectedIndex = -1;
+                else { sel.selectedIndex = 0; schSelect(); }
+            }
+        }
+        
+        for(let i=0; i<3; i++) {
+            let srcSel = document.getElementById('sel-scheduler-name-' + i);
+            if(srcSel) {
+                let cur = srcSel.value;
+                srcSel.innerHTML = '<option value="">-- Select a schedule --</option>';
+                for(let s in globalSchedules) {
+                    let opt = document.createElement('option');
+                    opt.value = s; opt.innerText = s;
+                    if(s === cur) opt.selected = true;
+                    srcSel.appendChild(opt);
+                }
+            }
+        }
+    }
+
+    function schSelect() {
+        let val = document.getElementById('sch-select').value;
+        if(!val) { document.getElementById('sch-editor').style.display='none'; return; }
+        schCurrentEdit = val;
+        document.getElementById('sch-name').value = val;
+        schCurrentEvents = [...globalSchedules[val]];
+        document.getElementById('sch-editor').style.display='block';
+        schRenderList();
+    }
+
+    function schNew() {
+        schCurrentEdit = "";
+        document.getElementById('sch-select').value = "";
+        document.getElementById('sch-name').value = "New Schedule";
+        schCurrentEvents = [];
+        document.getElementById('sch-editor').style.display='block';
+        schRenderList();
+    }
+
+    function schDelete() {
+        let val = document.getElementById('sch-select').value;
+        if(!val) return;
+        if(confirm("Are you sure you want to delete the '" + val + "' schedule?")) {
+            delete globalSchedules[val];
+            schSaveToServer();
+            document.getElementById('sch-editor').style.display='none';
+            document.getElementById('sch-select').value = "";
+        }
+    }
+
+    function schToggleTargetInput() {
+        let type = document.getElementById('sch-target-type').value;
+        
+        document.getElementById('sch-target-text').style.display = 'none';
+        document.getElementById('sch-target-file').style.display = 'none';
+        document.getElementById('sch-target-playlist').style.display = 'none';
+        document.getElementById('sch-target-device').style.display = 'none';
+        document.getElementById('sch-target-satip').style.display = 'none';
+        document.getElementById('sch-target-tone').style.display = 'none';
+        
+        if (type === 'url' || type === 'rtp_mpegts' || type === 'rtp_sdp' || type === 'file') {
+            document.getElementById('sch-target-text').style.display = 'block';
+            let ph = "";
+            if (type === 'url') ph = "http://...";
+            document.getElementById('sch-target-text').placeholder = ph;
+        } else if (type === 'backup_file') {
+            document.getElementById('sch-target-file').style.display = 'block';
+        } else if (type === 'playlist') {
+            document.getElementById('sch-target-playlist').style.display = 'block';
+        } else if (type === 'device') {
+            document.getElementById('sch-target-device').style.display = 'block';
+        } else if (type === 'satip') {
+            document.getElementById('sch-target-satip').style.display = 'flex';
+        } else if (type === 'tone') {
+            document.getElementById('sch-target-tone').style.display = 'flex';
+        }
+    }
+
+    function schToggleAllDays() {
+        let chks = document.querySelectorAll('.sch-day-chk');
+        let allChecked = Array.from(chks).every(c => c.checked);
+        chks.forEach(c => c.checked = !allChecked);
+    }
+
+    function schAddEvent() {
+        let chks = document.querySelectorAll('.sch-day-chk:checked');
+        if(chks.length === 0) { alert("Please select at least one day."); return; }
+        
+        let time = document.getElementById('sch-time').value;
+        if(!time) { alert("Time is required."); return; }
+        
+        let type = document.getElementById('sch-target-type').value;
+        let target = "";
+        
+        if (type === 'url') target = "url:" + document.getElementById('sch-target-text').value.trim();
+        else if (type === 'rtp_mpegts') target = "rtp_mpegts:" + document.getElementById('sch-target-text').value.trim();
+        else if (type === 'rtp_sdp') target = "rtp_sdp:" + document.getElementById('sch-target-text').value.trim();
+        else if (type === 'file') target = "file:" + document.getElementById('sch-target-text').value.trim();
+        else if (type === 'backup_file') target = document.getElementById('sch-target-file').value;
+        else if (type === 'playlist') target = document.getElementById('sch-target-playlist').value;
+        else if (type === 'device') target = "device:" + document.getElementById('sch-target-device').value;
+        else if (type === 'tone') target = "tone:" + document.getElementById('sch-tone-freq').value + "|" + document.getElementById('sch-tone-wave').value;
+        else if (type === 'satip') {
+            let ip = document.getElementById('sch-sat-ip').value.trim();
+            let port = document.getElementById('sch-sat-port').value.trim() || "554";
+            let src = document.getElementById('sch-sat-src').value;
+            let freq = document.getElementById('sch-sat-freq').value.trim();
+            let pol = document.getElementById('sch-sat-pol').value;
+            let msys = document.getElementById('sch-sat-msys').value;
+            let sr = document.getElementById('sch-sat-sr').value.trim();
+            let sid = document.getElementById('sch-sat-sid').value.trim();
+            let pid = document.getElementById('sch-sat-pid').value.trim();
+            if(!ip || !freq || !sr) { alert("IP, Freq, and SR are required for SAT>IP."); return; }
+            target = `satip:${ip}|${port}|${src}|${freq}|${pol}|${msys}|${sr}|${sid}|${pid}`;
+        }
+        
+        if(!target || target.endsWith(":")) { alert("Action / Source Details cannot be empty."); return; }
+        
+        chks.forEach(chk => {
+            schCurrentEvents.push({day: chk.value, time: time, target: target});
+        });
+        
+        const dayMap = {"Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6, "Sunday":7};
+        schCurrentEvents.sort((a, b) => {
+            if (dayMap[a.day] !== dayMap[b.day]) return dayMap[a.day] - dayMap[b.day];
+            return a.time.localeCompare(b.time);
+        });
+        
+        document.getElementById('sch-target-text').value = '';
+        schRenderList();
+    }
+
+    function schRemoveGroup(time, target) {
+        schCurrentEvents = schCurrentEvents.filter(ev => !(ev.time === time && ev.target === target));
+        schRenderList();
+    }
+
+    function schEditGroup(time, target) {
+        let matchingEvents = schCurrentEvents.filter(ev => ev.time === time && ev.target === target);
+        if (matchingEvents.length === 0) return;
+
+        let days = matchingEvents.map(ev => ev.day);
+
+        let chks = document.querySelectorAll('.sch-day-chk');
+        chks.forEach(chk => {
+            chk.checked = days.includes(chk.value);
+        });
+
+        document.getElementById('sch-time').value = time;
+
+        let typeSelect = document.getElementById('sch-target-type');
+        let textInput = document.getElementById('sch-target-text');
+        
+        if (target.startsWith('backup_file:')) {
+            typeSelect.value = 'backup_file';
+            document.getElementById('sch-target-file').value = target;
+        } else if (target.startsWith('playlist:')) {
+            typeSelect.value = 'playlist';
+            document.getElementById('sch-target-playlist').value = target;
+        } else if (target.startsWith('url:')) {
+            typeSelect.value = 'url';
+            textInput.value = target.substring(4);
+        } else if (target.startsWith('rtp_mpegts:')) {
+            typeSelect.value = 'rtp_mpegts';
+            textInput.value = target.substring(11);
+        } else if (target.startsWith('rtp_sdp:')) {
+            typeSelect.value = 'rtp_sdp';
+            textInput.value = target.substring(8);
+        } else if (target.startsWith('file:')) {
+            typeSelect.value = 'file';
+            textInput.value = target.substring(5);
+        } else if (target.startsWith('device:')) {
+            typeSelect.value = 'device';
+            document.getElementById('sch-target-device').value = target.substring(7);
+        } else if (target.startsWith('tone:')) {
+            typeSelect.value = 'tone';
+            let parts = target.substring(5).split('|');
+            document.getElementById('sch-tone-freq').value = parts[0] || '1000';
+            document.getElementById('sch-tone-wave').value = parts[1] || 'sine';
+        } else if (target.startsWith('satip:')) {
+            typeSelect.value = 'satip';
+            let parts = target.substring(6).split('|');
+            document.getElementById('sch-sat-ip').value = parts[0] || '';
+            document.getElementById('sch-sat-port').value = parts[1] || '554';
+            document.getElementById('sch-sat-src').value = parts[2] || '1';
+            document.getElementById('sch-sat-freq').value = parts[3] || '11515';
+            document.getElementById('sch-sat-pol').value = parts[4] || 'v';
+            document.getElementById('sch-sat-msys').value = parts[5] || 'dvbs';
+            document.getElementById('sch-sat-sr').value = parts[6] || '4000';
+            document.getElementById('sch-sat-sid').value = parts[7] || '';
+            document.getElementById('sch-sat-pid').value = parts[8] || '';
+        }
+
+        // Update field display
+        schToggleTargetInput();
+
+        schRemoveGroup(time, target);
+    }
+
+    function schRenderList() {
+        let html = '';
+        
+        // Dynamic grouping by hour and target for a compact display
+        let groups = {};
+        schCurrentEvents.forEach((ev) => {
+            let key = ev.time + '|' + ev.target;
+            if(!groups[key]) groups[key] = { time: ev.time, target: ev.target, days: [] };
+            if(!groups[key].days.includes(ev.day)) groups[key].days.push(ev.day);
+        });
+
+        const dayMap = {"Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6, "Sunday":7};
+        const shortDays = {"Monday":"Mon", "Tuesday":"Tue", "Wednesday":"Wed", "Thursday":"Thu", "Friday":"Fri", "Saturday":"Sat", "Sunday":"Sun"};
+
+        let groupArr = Object.values(groups);
+        groupArr.sort((a, b) => a.time.localeCompare(b.time));
+
+        groupArr.forEach((g) => {
+            g.days.sort((a, b) => dayMap[a] - dayMap[b]);
+            let daysDisplay = g.days.map(d => shortDays[d]).join(', ');
+            if (g.days.length === 7) daysDisplay = "Everyday";
+
+            let displayTarget = g.target;
+            if (displayTarget.startsWith('backup_file:')) displayTarget = "Backup Directory File: " + displayTarget.substring(12);
+            else if (displayTarget.startsWith('playlist:')) displayTarget = "Playlist: " + displayTarget.substring(9);
+            else if (displayTarget.startsWith('url:')) displayTarget = "IP Stream: " + displayTarget.substring(4);
+            else if (displayTarget.startsWith('rtp_mpegts:')) displayTarget = "RTP (Via MPEG-TS): " + displayTarget.substring(11);
+            else if (displayTarget.startsWith('rtp_sdp:')) displayTarget = "RTP (Via SDP File): " + displayTarget.substring(8);
+            else if (displayTarget.startsWith('file:')) displayTarget = "Local File: " + displayTarget.substring(5);
+            else if (displayTarget.startsWith('device:')) displayTarget = "Audio Device: " + displayTarget.substring(7);
+            else if (displayTarget.startsWith('tone:')) displayTarget = "Tone Generator: " + displayTarget.substring(5).replace('|', 'Hz (Wave: ') + ")";
+            else if (displayTarget.startsWith('satip:')) {
+                let parts = displayTarget.substring(6).split('|');
+                displayTarget = `Satellite Stream: ${parts[0]} (${parts[3]} ${parts[4].toUpperCase()})`;
+            }
+            
+            // Securing the target to avoid quotation mark conflicts in the HTML onclick attribute.
+            let escapedTarget = g.target.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            
+            html += `<div style="display:flex; justify-content:space-between; padding:8px 10px; border-bottom:1px solid #eee; font-size:0.9rem; align-items:center; transition: background 0.2s;">
+                <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    <span style="display:inline-block; min-width:80px; font-weight:bold; color:var(--blue); margin-right:10px;">${daysDisplay}</span> 
+                    <span style="display:inline-block; width:60px; font-weight:bold; background:#e2e8f0; text-align:center; border-radius:3px; padding:2px 0; margin-right:10px;">${g.time}</span>
+                    <span style="color:#333;">&rarr; ${displayTarget}</span>
+                </div>
+                <div style="display:flex; gap:5px;">
+                    <button type="button" class="btn-sec" style="padding:4px 10px; color:white; background:var(--blue); border:none; font-weight:bold; border-radius:3px; cursor:pointer;" onclick="schEditGroup('${g.time}', '${escapedTarget}')">Edit</button>
+                    <button type="button" class="btn-sec" style="padding:4px 8px; color:white; background:var(--danger); border:none; font-weight:bold; border-radius:3px; cursor:pointer;" onclick="schRemoveGroup('${g.time}', '${escapedTarget}')">Delete</button>
+                </div>
+            </div>`;
+        });
+        document.getElementById('sch-list').innerHTML = html || '<div style="color:#888; text-align:center; padding:30px; font-style:italic;">No events scheduled.</div>';
+    }
+
+    function schSave() {
+        let newName = document.getElementById('sch-name').value.trim();
+        if(!newName) { alert("Name required"); return; }
+        if(schCurrentEvents.length === 0) { alert("Your schedule cannot be empty. Please add at least one event."); return; }
+        
+        if(schCurrentEdit && schCurrentEdit !== newName) {
+            delete globalSchedules[schCurrentEdit];
+        }
+        globalSchedules[newName] = schCurrentEvents;
+        schSaveToServer();
+        schCurrentEdit = newName;
+        document.getElementById('sch-select').value = newName;
+        alert("Schedule saved successfully.");
+    }
+
+    function schSaveToServer() {
+        fetch('/update_schedules', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({schedules: globalSchedules})
+        }).then(r => r.json()).then(d => {
+            schUpdateSelects();
         });
     }
 
@@ -1603,7 +2072,8 @@
 
     window.onload = function() {
         pmUpdateSelects();
-        for(let i=0; i<3; i++) { 
+        schUpdateSelects();
+        for(let i=0; i<3; i++) {
             if(document.getElementById('sel-type-' + i)) {
                 toggleType(i); 
                 if(document.getElementById('sel-backup-mode-' + i)) toggleBackupMode(i);
