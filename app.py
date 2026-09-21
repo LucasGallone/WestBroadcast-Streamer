@@ -62,7 +62,8 @@ DEFAULT_CONFIG = {
         'loss_timeout_sec': 10.0,
         'recovery_threshold_db': -35.0,
         'recovery_timeout_sec': 5.0,
-        'selection_mode': 'auto'
+        'selection_mode': 'auto',
+        'unreachable_timeout_sec': 5
     },
     'fm': {
         'tilt': False,
@@ -83,7 +84,8 @@ DEFAULT_CONFIG = {
         'trigger_delay': 30,
         'tls': False
     },
-    'playlists': {}
+    'playlists': {},
+    'schedules': {}
 }
 
 def load_config():
@@ -101,8 +103,8 @@ def load_config():
                     cfg['server'][key] = DEFAULT_CONFIG['server'][key]
                     
             if 'fm' not in cfg: cfg['fm'] = DEFAULT_CONFIG['fm'].copy()
-            if 'fm' not in cfg: cfg['fm'] = DEFAULT_CONFIG['fm'].copy()
             if 'playlists' not in cfg: cfg['playlists'] = {}
+            if 'schedules' not in cfg: cfg['schedules'] = {}
             if 'output_latency_ms' not in cfg['audio']: cfg['audio']['output_latency_ms'] = 1000
             if 'preemph' in cfg['fm']: del cfg['fm']['preemph']
             if 'smtp' not in cfg: cfg['smtp'] = DEFAULT_CONFIG['smtp'].copy()
@@ -126,6 +128,7 @@ def load_config():
                 if 'backup_file' not in src: src['backup_file'] = ''
                 if 'backup_playlist_name' not in src: src['backup_playlist_name'] = ''
                 if 'backup_playlist_shuffle' not in src: src['backup_playlist_shuffle'] = False
+                if 'schedule_name' not in src: src['schedule_name'] = ''
                 if 'backup_mode' not in src: src['backup_mode'] = 'single'
                 if 'rtp_uri' not in src: src['rtp_uri'] = ''
                 if 'meta_export_method' not in src: src['meta_export_method'] = 'file'
@@ -329,6 +332,51 @@ def send_smtp_alert(subject, body):
     except Exception as e:
         add_internal_log(f"SMTP Error: {str(e)}", "ERROR")
 
+def get_scheduled_target(schedule_name):
+    schedule = CONFIG.get('schedules', {}).get(schedule_name, [])
+    if not schedule: return None
+
+    now = datetime.now()
+    current_day = now.weekday() # 0 = Monday, 6 = Sunday
+    current_minute = now.hour * 60 + now.minute
+    current_abs_minute = current_day * 1440 + current_minute
+
+    events = []
+    for ev in schedule:
+        day_str = ev.get('day', '')
+        time_str = ev.get('time', '')
+        target = ev.get('target', '')
+        if not time_str or not target: continue
+        
+        parts = time_str.split(':')
+        if len(parts) != 2: continue
+        try: ev_min = int(parts[0]) * 60 + int(parts[1])
+        except: continue
+
+        days = []
+        if day_str == 'Everyday': days = list(range(7))
+        elif day_str == 'Monday': days = [0]
+        elif day_str == 'Tuesday': days = [1]
+        elif day_str == 'Wednesday': days = [2]
+        elif day_str == 'Thursday': days = [3]
+        elif day_str == 'Friday': days = [4]
+        elif day_str == 'Saturday': days = [5]
+        elif day_str == 'Sunday': days = [6]
+
+        for d in days:
+            events.append((d * 1440 + ev_min, target))
+
+    if not events: return None
+    events.sort(key=lambda x: x[0])
+
+    best_target = events[-1][1]
+    for ev_abs_min, target in reversed(events):
+        if ev_abs_min <= current_abs_minute:
+            best_target = target
+            break
+
+    return best_target
+
 # --- 4. AUDIO CLASSES ---
 class SourceChannel:
     def __init__(self, index):
@@ -348,6 +396,7 @@ class SourceChannel:
         self.last_vu = {'l': -60.0, 'r': -60.0}
         self.saved_positions = {}  # Tracks playback positions for local files
         self.stream_title = ""     # Added for single-connection metadata extraction
+        self.meta_delay_queue = [] # Delays titles to perfectly match actual audio output
 
     def start(self):
         if self.running: return
@@ -419,6 +468,25 @@ class SourceChannel:
                             playlist = CONFIG.get('playlists', {}).get(src['backup_playlist_name'], [])
                             p_idx = getattr(self, 'playlist_idx', 0)
                             if p_idx < len(playlist): target = os.path.join(BACKUP_DIR, playlist[p_idx])
+                    elif src['type'] == 'scheduler':
+                        target = get_scheduled_target(src.get('schedule_name', ''))
+                        if target:
+                            if target.startswith('url:'): target = target.split(':', 1)[1]
+                            elif target.startswith('rtp_mpegts:'): target = target.split(':', 1)[1]
+                            elif target.startswith('rtp_sdp:'): target = target.split(':', 1)[1]
+                            elif target.startswith('file:'): target = target.split(':', 1)[1]
+                            elif target.startswith('satip:'):
+                                parts = target.split(':', 1)[1].split('|')
+                                if len(parts) >= 7: target = f"rtsp://{parts[0]}:{parts[1]}/?src={parts[2]}&freq={parts[3]}&pol={parts[4]}&msys={parts[5]}&sr={parts[6]}&pids=all"
+                            elif target.startswith('backup_file:'):
+                                target = os.path.join(BACKUP_DIR, target.split(':', 1)[1])
+                            elif target.startswith('playlist:'):
+                                playlist = CONFIG.get('playlists', {}).get(target.split(':', 1)[1], [])
+                                p_idx = getattr(self, 'playlist_idx', 0)
+                                if p_idx < len(playlist): target = os.path.join(BACKUP_DIR, playlist[p_idx])
+                                else: target = ""
+                            elif target.startswith('device:') or target.startswith('tone:'):
+                                target = ""
                     elif src['type'] == 'stream': target = src['url']
                     
                     if target:
@@ -463,11 +531,22 @@ class SourceChannel:
         if self.is_reconnecting or self.status_text == "BUFFERING":
             return "BUFFERING...", "#e67e22"
 
+        src = CONFIG['sources'][self.index]
+        
+        is_hls = False
+        if src['type'] == 'stream' and src.get('url') and '.m3u8' in src['url'].lower():
+            is_hls = True
+        elif src['type'] == 'scheduler':
+            sched_t = get_scheduled_target(src.get('schedule_name', ''))
+            if sched_t and sched_t.startswith('url:') and '.m3u8' in sched_t.lower():
+                is_hls = True
+                
+        timeout_limit = 15.0 if is_hls else 5.0
+
         # 3RD PRIORITY: Data timeout during playback
-        if self.running and self.status_text == "PLAYING" and (time.time() - self.last_data_time > 5.0):
+        if self.running and self.status_text == "PLAYING" and (time.time() - self.last_data_time > timeout_limit):
              return "UNREACHABLE", "#8B0000"
 
-        src = CONFIG['sources'][self.index]
         if src['type'] == 'stream' and not src['url']: return "NOT CONFIGURED", "#999"
         if src['type'] in ['rtp_mpegts', 'multiplex'] and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'rtp_sdp' and not src['path']: return "NOT CONFIGURED", "#999"
@@ -479,6 +558,7 @@ class SourceChannel:
             if src.get('backup_mode', 'single') == 'playlist' and not src.get('backup_playlist_name'): return "NOT CONFIGURED", "#999"
         
         if src['type'] == 'file' and src['path'] and not os.path.exists(src['path']): return "FILE NOT FOUND", "#b00"
+        if src['type'] == 'scheduler' and not src.get('schedule_name'): return "NOT CONFIGURED", "#999"
         if src['type'] == 'backup_dir':
             if src.get('backup_mode', 'single') == 'single':
                 if src.get('backup_file') and not os.path.exists(os.path.join(BACKUP_DIR, src['backup_file'])): return "FILE NOT FOUND", "#b00"
@@ -493,8 +573,8 @@ class SourceChannel:
         # Active management
         if is_active:
             if self.status_text == "BUFFERING": return "BUFFERING...", "#e67e22"
-            # Prevent "SILENT" status display for 5 seconds if playback has just started
-            if is_silence_detected and (time.time() - self.play_start_time > 5.0): 
+            # Prevent "SILENT" status display if playback has just started
+            if is_silence_detected and (time.time() - self.play_start_time > timeout_limit): 
                 return "SILENT", "#8B0000"
             if self.status_text == "PLAYING": return "PLAYING", "#006400"
             return "UNREACHABLE", "#8B0000"
@@ -514,6 +594,13 @@ class SourceChannel:
             self.is_reconnecting = False
             
             src = CONFIG['sources'][self.index]
+            
+            sched_target = None
+            active_type = src['type']
+            if active_type == 'scheduler':
+                sched_target = get_scheduled_target(src.get('schedule_name', ''))
+                if sched_target and sched_target.startswith('device:'):
+                    active_type = 'device'
 
             # --- FM Processing Filters ---
             af_filters = []
@@ -525,12 +612,101 @@ class SourceChannel:
             if af_filters:
                 filter_arg = ['-af', ",".join(af_filters)]
 
-            cmd = []
             valid = False
             rw_timeout = '15000000' 
 
-            if src['type'] == 'device':
-                if src.get('input_device') is not None:
+            def stderr_reader(proc, channel):
+                while proc and proc.poll() is None:
+                    try:
+                        line = proc.stderr.readline()
+                        if not line: break
+                        line_str = line.decode('utf-8', errors='ignore')
+                        line_lower = line_str.lower()
+                        if "streamtitle" in line_lower or "title" in line_lower:
+                            m1 = re.search(r"StreamTitle\s*=\s*['\"]?(.*?)['\"]?(?:;|$)", line_str, re.IGNORECASE)
+                            m2 = re.search(r"StreamTitle\s*:\s*(.*)", line_str, re.IGNORECASE)
+                            m3 = re.search(r"\btitle\s*:\s*(.*)", line_str, re.IGNORECASE)
+                            val = m1.group(1).strip() if m1 else (m2.group(1).strip() if m2 else (m3.group(1).strip() if m3 else None))
+                            
+                            if val:
+                                # Calculate actual audio buffer duration in seconds to delay the text display accordingly
+                                buffered_sec = (channel.queue.qsize() * BLOCK_SIZE) / SAMPLE_RATE
+                                target_time = time.time() + buffered_sec
+                                channel.meta_delay_queue.append((target_time, val))
+                    except: pass
+
+            def build_sched_cmd(sched_target):
+                c = []
+                t_path = sched_target
+                val = True
+                if sched_target.startswith('url:'):
+                    url = sched_target.split(':', 1)[1]
+                    if '.m3u8' in url.lower():
+                        c = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats', '-re', '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-rw_timeout', rw_timeout, '-user_agent', 'VLC/3.0.0', '-icy', '1', '-i', url] + filter_arg
+                    else:
+                        c = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats', '-fflags', 'nobuffer', '-flags', 'low_delay', '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5', '-rw_timeout', rw_timeout, '-user_agent', 'VLC/3.0.0', '-icy', '1', '-i', url] + filter_arg
+                elif sched_target.startswith('rtp_mpegts:'):
+                    c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '1000000', '-timeout', rw_timeout, '-i', sched_target.split(':', 1)[1]] + filter_arg
+                elif sched_target.startswith('rtp_sdp:'):
+                    c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,udp,rtp', '-i', sched_target.split(':', 1)[1]] + filter_arg
+                elif sched_target.startswith('satip:'):
+                    parts = sched_target.split(':', 1)[1].split('|')
+                    if len(parts) >= 7:
+                        uri = f"rtsp://{parts[0]}:{parts[1]}/?src={parts[2]}&freq={parts[3]}&pol={parts[4]}&msys={parts[5]}&sr={parts[6]}&pids=all"
+                        c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '1000000', '-timeout', rw_timeout, '-i', uri] + filter_arg
+                    else: val = False
+                elif sched_target.startswith('tone:'):
+                    parts = sched_target.split(':', 1)[1].split('|')
+                    freq = parts[0] if len(parts) > 0 else "1000"
+                    wave = parts[1] if len(parts) > 1 else "sine"
+                    expr = f"sin(2*PI*t*{freq})" if wave == 'sine' else f"if(gt(sin(2*PI*t*{freq}),0),1,-1)"
+                    lavfi_str = f"aevalsrc='{expr}|{expr}:s={SAMPLE_RATE}'"
+                    c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re', '-f', 'lavfi', '-i', lavfi_str] + filter_arg
+                elif sched_target.startswith('backup_file:'):
+                    bpath = os.path.join(BACKUP_DIR, sched_target.split(':', 1)[1])
+                    if os.path.exists(bpath):
+                        start_pos = self.saved_positions.get(bpath, 0.0) if memorize else 0.0
+                        ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                        c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
+                        t_path = bpath
+                    else: val = False
+                elif sched_target.startswith('playlist:'):
+                    playlist = CONFIG.get('playlists', {}).get(sched_target.split(':', 1)[1], [])
+                    if playlist:
+                        if getattr(self, 'playlist_idx', 0) >= len(playlist): self.playlist_idx = 0
+                        bpath = os.path.join(BACKUP_DIR, playlist[getattr(self, 'playlist_idx', 0)])
+                        if os.path.exists(bpath):
+                            start_pos = self.saved_positions.get(bpath, 0.0) if memorize else 0.0
+                            ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                            c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
+                            t_path = bpath
+                        else:
+                            val = False
+                            self.playlist_idx += 1
+                    else: val = False
+                elif sched_target.startswith('file:'):
+                    fpath = sched_target.split(':', 1)[1]
+                    if os.path.exists(fpath):
+                        start_pos = self.saved_positions.get(fpath, 0.0) if memorize else 0.0
+                        ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                        c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', fpath] + filter_arg
+                        t_path = fpath
+                    else: val = False
+                else:
+                    if os.path.exists(sched_target):
+                        start_pos = self.saved_positions.get(sched_target, 0.0) if memorize else 0.0
+                        ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                        c = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', sched_target] + filter_arg
+                    else: val = False
+                return c, t_path, val
+
+            cmd = []
+            if active_type == 'device':
+                dev_id = None
+                if src['type'] == 'device': dev_id = src.get('input_device')
+                elif sched_target and sched_target.startswith('device:'): dev_id = sched_target.split(':', 1)[1]
+                
+                if dev_id is not None and dev_id != '':
                     self.status_text = "PLAYING"
                     self.play_start_time = time.time()
                     self.last_data_time = time.time()
@@ -544,9 +720,13 @@ class SourceChannel:
                                 target_ms = CONFIG['sources'][self.index].get('max_latency_ms', 6000)
                                 max_items = int((target_ms / 1000.0) * SAMPLE_RATE / BLOCK_SIZE)
                                 if max_items < 1: max_items = 1
-                                while self.queue.qsize() >= max_items:
-                                    try: self.queue.get_nowait()
-                                    except queue.Empty: break
+                                
+                                # Clean catch-up: bulk drop old data to avoid chipmunk stuttering
+                                if self.queue.qsize() > max_items:
+                                    drop_amount = max(1, int(max_items * 0.2))
+                                    for _ in range(drop_amount):
+                                        try: self.queue.get_nowait()
+                                        except queue.Empty: break
                                     
                             if not self.queue.full(): self.queue.put(indata.copy())
                         else:
@@ -558,7 +738,7 @@ class SourceChannel:
                             engine.vu_data['sources'][self.index]['r'] = db
 
                     try:
-                        with sd.InputStream(device=int(src['input_device']), samplerate=SAMPLE_RATE, channels=CHANNELS, callback=in_callback, blocksize=BLOCK_SIZE):
+                        with sd.InputStream(device=int(dev_id), samplerate=SAMPLE_RATE, channels=CHANNELS, callback=in_callback, blocksize=BLOCK_SIZE):
                             while self.running: 
                                 self.last_data_time = time.time()
                                 time.sleep(0.1)
@@ -584,46 +764,13 @@ class SourceChannel:
             # Check if user wants to resume playback
             memorize = src.get('memorize_pos', False)
 
-            if src['type'] == 'file':
-                if src['path'] and os.path.exists(src['path']):
-                    valid = True
-                    target_path = src['path']
-                    start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
-                    ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
-                    cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', src['path']] + filter_arg
+            if active_type == 'scheduler':
+                if sched_target:
+                    cmd, target_path, valid = build_sched_cmd(sched_target)
+                    if not valid: self.status_text = "FILE ERROR"
+                    self.current_sched_target = sched_target
                 else:
-                    self.status_text = "FILE ERROR"
-            elif src['type'] == 'backup_dir':
-                if src.get('backup_mode', 'single') == 'single':
-                    bpath = os.path.join(BACKUP_DIR, src.get('backup_file', ''))
-                    if src.get('backup_file') and os.path.exists(bpath):
-                        valid = True
-                        target_path = bpath
-                        start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
-                        ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
-                        cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
-                    else:
-                        self.status_text = "FILE ERROR"
-                else:
-                    playlist = CONFIG.get('playlists', {}).get(src.get('backup_playlist_name', ''), [])
-                    if playlist:
-                        if src.get('backup_playlist_shuffle') and len(playlist) > 0:
-                            self.playlist_idx = int(np.random.randint(0, len(playlist)))
-                        elif getattr(self, 'playlist_idx', 0) >= len(playlist):
-                            self.playlist_idx = 0
-                        p_idx = self.playlist_idx
-                        bpath = os.path.join(BACKUP_DIR, playlist[p_idx])
-                        if os.path.exists(bpath):
-                            valid = True
-                            target_path = bpath
-                            start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
-                            ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
-                            cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
-                        else:
-                            self.status_text = "FILE ERROR"
-                            self.playlist_idx += 1
-                    else:
-                        self.status_text = "FILE ERROR"
+                    self.status_text = "NO CONFIG"
             elif src['type'] in ['rtp_mpegts', 'multiplex']:
                 if src['rtp_uri']:
                     valid = True
@@ -648,13 +795,20 @@ class SourceChannel:
             else: # stream
                 if src['url']:
                     valid = True
-                    # Passage en loglevel "debug" pour forcer FFmpeg à cracher les mises à jour ICY cachées
-                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats',
-                           '-fflags', 'nobuffer', '-flags', 'low_delay',
-                           '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
-                           '-rw_timeout', rw_timeout,
-                           '-user_agent', 'VLC/3.0.0', '-icy', '1',
-                           '-i', src['url']] + filter_arg
+                    if '.m3u8' in src['url'].lower():
+                        cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats',
+                               '-re',
+                               '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                               '-rw_timeout', rw_timeout,
+                               '-user_agent', 'VLC/3.0.0', '-icy', '1',
+                               '-i', src['url']] + filter_arg
+                    else:
+                        cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats',
+                               '-fflags', 'nobuffer', '-flags', 'low_delay',
+                               '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                               '-rw_timeout', rw_timeout,
+                               '-user_agent', 'VLC/3.0.0', '-icy', '1',
+                               '-i', src['url']] + filter_arg
                 else:
                     self.status_text = "NO CONFIG"
 
@@ -662,13 +816,15 @@ class SourceChannel:
                 time.sleep(1)
                 continue
 
-            # Map specific service if it's a multiplexed stream (like SAT>IP)
             map_arg = []
             if src['type'] in ['rtp_mpegts', 'multiplex']:
-                if src.get('pid'):
-                    map_arg = ['-map', f"0:i:{src['pid']}"]
-                elif src.get('sid'):
-                    map_arg = ['-map', f"0:p:{src['sid']}:a:0"]
+                if src.get('pid'): map_arg = ['-map', f"0:i:{src['pid']}"]
+                elif src.get('sid'): map_arg = ['-map', f"0:p:{src['sid']}:a:0"]
+            elif src['type'] == 'scheduler' and sched_target and sched_target.startswith('satip:'):
+                parts = sched_target.split(':', 1)[1].split('|')
+                if len(parts) >= 9:
+                    if parts[8]: map_arg = ['-map', f"0:i:{parts[8]}"]
+                    elif parts[7]: map_arg = ['-map', f"0:p:{parts[7]}:a:0"]
 
             cmd.extend(map_arg + ['-f', 's16le', '-ac', str(CHANNELS), '-ar', str(SAMPLE_RATE), '-acodec', 'pcm_s16le', 'pipe:1'])
             self.status_text = "BUFFERING"
@@ -678,29 +834,6 @@ class SourceChannel:
                     self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
                 else:
                     self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
-                
-                # Start stderr reader to prevent pipe blocking and extract metadata
-                def stderr_reader(proc, channel):
-                    while proc and proc.poll() is None:
-                        try:
-                            line = proc.stderr.readline()
-                            if not line: break
-                            line_str = line.decode('utf-8', errors='ignore')
-                            
-                            if "streamtitle" in line_str.lower():
-                                m1 = re.search(r"StreamTitle\s*=\s*['\"]?(.*?)['\"]?(?:;|$)", line_str, re.IGNORECASE)
-                                m2 = re.search(r"StreamTitle\s*:\s*(.*)", line_str, re.IGNORECASE)
-                                
-                                val = None
-                                if m1:
-                                    val = m1.group(1).strip()
-                                elif m2:
-                                    val = m2.group(1).strip()
-                                    
-                                if val:
-                                    channel.stream_title = val
-                        except:
-                            pass
                 
                 threading.Thread(target=stderr_reader, args=(self.process, self), daemon=True).start()
                 
@@ -721,7 +854,34 @@ class SourceChannel:
                     
                     self.last_data_time = time.time()
                     
-                    # Accurate playback position tracking for local files
+                    if active_type == 'scheduler':
+                        if time.time() - getattr(self, 'last_schedule_check', 0) > 1.0:
+                            self.last_schedule_check = time.time()
+                            new_target = get_scheduled_target(src.get('schedule_name', ''))
+                            if new_target and new_target != getattr(self, 'current_sched_target', ''):
+                                n_cmd, n_tpath, n_valid = build_sched_cmd(new_target)
+                                if n_valid:
+                                    n_map = []
+                                    if new_target.startswith('satip:'):
+                                        parts = new_target.split(':', 1)[1].split('|')
+                                        if len(parts) >= 9:
+                                            if parts[8]: n_map = ['-map', f"0:i:{parts[8]}"]
+                                            elif parts[7]: n_map = ['-map', f"0:p:{parts[7]}:a:0"]
+                                    n_cmd.extend(n_map + ['-f', 's16le', '-ac', str(CHANNELS), '-ar', str(SAMPLE_RATE), '-acodec', 'pcm_s16le', 'pipe:1'])
+                                    n_proc = subprocess.Popen(n_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+                                    threading.Thread(target=stderr_reader, args=(n_proc, self), daemon=True).start()
+                                    
+                                    if self.process:
+                                        try: self.process.kill()
+                                        except: pass
+                                    self.process = n_proc
+                                    target_path = n_tpath
+                                    self.current_sched_target = new_target
+                                    self.last_data_time = time.time()
+                                    continue
+                                else:
+                                    break
+                    
                     if target_path:
                         frames_read = len(raw) / (2 * CHANNELS)
                         start_pos += (frames_read / SAMPLE_RATE)
@@ -732,15 +892,16 @@ class SourceChannel:
                     
                     # Target Buffer / Catch-up logic for live sources
                     if src['type'] not in ['file', 'backup_dir', 'tone']:
-                        target_ms = src.get('max_latency_ms', 1500)
+                        target_ms = src.get('max_latency_ms', 6000)
                         max_items = int((target_ms / 1000.0) * SAMPLE_RATE / BLOCK_SIZE)
                         if max_items < 1: max_items = 1
-                        while self.queue.qsize() >= max_items:
-                            try:
-                                self.queue.get_nowait()
-                            except queue.Empty:
-                                break
-                    
+                        
+                        if self.queue.qsize() > max_items:
+                            drop_amount = max(1, int(max_items * 0.2))
+                            for _ in range(drop_amount):
+                                try: self.queue.get_nowait()
+                                except queue.Empty: break
+
                     if not self.queue.full():
                         self.queue.put(float_data)
                     else:
@@ -755,14 +916,16 @@ class SourceChannel:
                     try: self.process.kill()
                     except: pass
             
-            # SORTI DU BLOC FINALLY : Enchaînement de la playlist et bouclage
-            if self.running and valid and is_normal_eof and src['type'] in ['file', 'backup_dir']:
-                # Reset position on natural EOF to start from beginning next time
+            if self.running and valid and is_normal_eof and src['type'] in ['file', 'backup_dir', 'scheduler']:
                 if target_path:
                     self.saved_positions[target_path] = 0.0
                     
                 if src['type'] == 'backup_dir' and src.get('backup_mode', 'single') == 'playlist':
                     self.playlist_idx = getattr(self, 'playlist_idx', 0) + 1
+                elif src['type'] == 'scheduler':
+                    sched_t = get_scheduled_target(src.get('schedule_name', ''))
+                    if sched_t and sched_t.startswith('playlist:'):
+                        self.playlist_idx = getattr(self, 'playlist_idx', 0) + 1
                     
                 time.sleep(0.1)
                 continue
@@ -770,11 +933,9 @@ class SourceChannel:
             self.status_text = "UNREACHABLE"
             self.is_reconnecting = True
             
-            # 10 seconds timeout before the next reconnection attempt (if the stream has UNREACHABLE status)
             for _ in range(100):
                 if not self.running: break
                 time.sleep(0.1)
-
 
 class BroadcastEngine:
     def __init__(self):
@@ -990,6 +1151,12 @@ class BroadcastEngine:
                 src = CONFIG['sources'][i]
                 title = ""
                 
+                # Pop expired delayed metadata to actual stream_title
+                ch = self.channels[i]
+                while len(ch.meta_delay_queue) > 0 and ch.meta_delay_queue[0][0] <= now:
+                    _, val = ch.meta_delay_queue.pop(0)
+                    ch.stream_title = val
+                
                 # Check stream URL first
                 if src['type'] == 'stream' and src['url']:
                     extracted = self.channels[i].stream_title
@@ -1014,6 +1181,56 @@ class BroadcastEngine:
                 elif src['type'] == 'tone':
                     title = "Test Tone Generator"
                     raw_titles[i] = title
+                elif src['type'] == 'scheduler':
+                    sched_target = get_scheduled_target(src.get('schedule_name', ''))
+                    if sched_target:
+                        if sched_target.startswith('url:') or sched_target.startswith('http') or sched_target.startswith('rtmp') or sched_target.startswith('rtsp'):
+                            extracted = self.channels[i].stream_title
+                            if extracted:
+                                title = extracted
+                                raw_titles[i] = extracted
+                            else:
+                                title = raw_titles[i]
+                        elif sched_target.startswith('satip:'):
+                            parts = sched_target.split(':', 1)[1].split('|')
+                            if len(parts) >= 9:
+                                ssid = parts[7]
+                                spid = parts[8]
+                                if spid: title = f"PID {spid}"
+                                elif ssid: title = f"SID {ssid}"
+                                else: title = "SAT>IP"
+                            else: title = "SAT>IP"
+                            raw_titles[i] = title
+                        elif sched_target.startswith('rtp_mpegts:'):
+                            title = "RTP MPEG-TS"
+                            raw_titles[i] = title
+                        elif sched_target.startswith('rtp_sdp:'):
+                            title = "RTP SDP"
+                            raw_titles[i] = title
+                        elif sched_target.startswith('tone:'):
+                            title = "Test Tone Generator"
+                            raw_titles[i] = title
+                        elif sched_target.startswith('device:'):
+                            title = "Audio Input Device"
+                            raw_titles[i] = title
+                        elif sched_target.startswith('backup_file:'):
+                            title = sched_target.split(':', 1)[1]
+                            raw_titles[i] = title
+                        elif sched_target.startswith('playlist:'):
+                            pname = sched_target.split(':', 1)[1]
+                            playlist = CONFIG.get('playlists', {}).get(pname, [])
+                            p_idx = getattr(self.channels[i], 'playlist_idx', 0)
+                            if p_idx < len(playlist): title = playlist[p_idx]
+                            else: title = ""
+                            raw_titles[i] = title
+                        elif sched_target.startswith('file:'):
+                            title = os.path.basename(sched_target.split(':', 1)[1])
+                            raw_titles[i] = title
+                        else:
+                            title = os.path.basename(sched_target)
+                            raw_titles[i] = title
+                    else:
+                        title = ""
                 elif src['type'] == 'device':
                     title = "Audio Input Device"
                     raw_titles[i] = title
@@ -1188,11 +1405,12 @@ class BroadcastEngine:
                 elif src_cfg['type'] in ['rtp_mpegts', 'rtp_sdp', 'multiplex']: should_run = True 
                 elif src_cfg['type'] == 'tone': should_run = True
                 elif src_cfg['type'] == 'device': should_run = True
-                elif src_cfg['type'] in ['file', 'backup_dir']: 
+                elif src_cfg['type'] in ['file', 'backup_dir', 'scheduler']: 
                      # Only run file if it IS the current source
                      if self.current_source_idx == i: should_run = True
                 
                 if should_run:
+                    if src_cfg['type'] == 'scheduler' and not src_cfg.get('schedule_name'): should_run = False
                     if src_cfg['type'] in ['file', 'rtp_sdp'] and not src_cfg['path']: should_run = False
                     if src_cfg['type'] == 'backup_dir':
                         if src_cfg.get('backup_mode', 'single') == 'single' and not src_cfg.get('backup_file'): should_run = False
@@ -1205,41 +1423,52 @@ class BroadcastEngine:
                 elif not should_run and ch.running: ch.stop()
 
                 # 2. Technical timeout (FFmpeg failure scenario)
-                if ch.running and ch.status_text == "PLAYING" and (time.time() - ch.last_data_time > 5.0):
+                is_hls = False
+                if src_cfg['type'] == 'stream' and src_cfg.get('url') and '.m3u8' in src_cfg['url'].lower():
+                    is_hls = True
+                elif src_cfg['type'] == 'scheduler':
+                    sched_t = get_scheduled_target(src_cfg.get('schedule_name', ''))
+                    if sched_t and sched_t.startswith('url:') and '.m3u8' in sched_t.lower():
+                        is_hls = True
+                
+                tech_timeout = 15.0 if is_hls else 5.0
+
+                if ch.running and ch.status_text == "PLAYING" and (time.time() - ch.last_data_time > tech_timeout):
                      if ch.process:
                          try: ch.process.kill()
                          except: pass
                      ch.status_text = "UNREACHABLE"
 
                 # 3. VU-Meters update
-                if not ch.running or ch.status_text == "UNREACHABLE":
-                    self.vu_data['sources'][i]['l'] = -60.0
-                    self.vu_data['sources'][i]['r'] = -60.0
-                elif i != self.current_source_idx and ch.running:
-                    # Backup sources playback
-                    try:
-                        max_lat_sec = src_cfg.get('max_latency_ms', 6000) / 1000.0
-                        pre_buf = min(1.5, max_lat_sec * 0.5) 
-                        
-                        target_qsize = int(pre_buf * (SAMPLE_RATE / BLOCK_SIZE))
-                        if target_qsize < 1: target_qsize = 1
-                        q_sz = ch.queue.qsize()
-                        
-                        if q_sz > target_qsize and now >= ch.next_phantom_read:
-                            data = ch.queue.get_nowait()
+                if i != self.current_source_idx:
+                    if not ch.running or ch.status_text == "UNREACHABLE":
+                        self.vu_data['sources'][i]['l'] = -60.0
+                        self.vu_data['sources'][i]['r'] = -60.0
+                    elif ch.running:
+                        # Backup sources playback
+                        try:
+                            max_lat_sec = src_cfg.get('max_latency_ms', 6000) / 1000.0
+                            pre_buf = min(1.5, max_lat_sec * 0.5) 
                             
-                            if ch.next_phantom_read == 0: ch.next_phantom_read = now
-                            ch.next_phantom_read += block_duration
-                            if ch.next_phantom_read < now: ch.next_phantom_read = now + block_duration
+                            target_qsize = int(pre_buf * (SAMPLE_RATE / BLOCK_SIZE))
+                            if target_qsize < 1: target_qsize = 1
+                            q_sz = ch.queue.qsize()
+                            
+                            if q_sz > target_qsize and now >= ch.next_phantom_read:
+                                data = ch.queue.get_nowait()
+                                
+                                if ch.next_phantom_read == 0: ch.next_phantom_read = now
+                                ch.next_phantom_read += block_duration
+                                if ch.next_phantom_read < now: ch.next_phantom_read = now + block_duration
 
-                            gain_in = 10 ** (src_cfg['gain'] / 20.0)
-                            data = data * gain_in
-                            
-                            pk_l = np.max(np.abs(data[:, 0])) if len(data) > 0 else 0
-                            pk_r = np.max(np.abs(data[:, 1])) if len(data) > 0 else 0
-                            self.vu_data['sources'][i]['l'] = float(20 * np.log10(pk_l) if pk_l > 0.00001 else -60.0)
-                            self.vu_data['sources'][i]['r'] = float(20 * np.log10(pk_r) if pk_r > 0.00001 else -60.0)
-                    except: pass
+                                gain_in = 10 ** (src_cfg['gain'] / 20.0)
+                                data = data * gain_in
+                                
+                                pk_l = np.max(np.abs(data[:, 0])) if len(data) > 0 else 0
+                                pk_r = np.max(np.abs(data[:, 1])) if len(data) > 0 else 0
+                                self.vu_data['sources'][i]['l'] = float(20 * np.log10(pk_l) if pk_l > 0.00001 else -60.0)
+                                self.vu_data['sources'][i]['r'] = float(20 * np.log10(pk_r) if pk_r > 0.00001 else -60.0)
+                        except: pass
 
                 # 4. SMTP Alerts logic
                 current_status_str, _ = self.get_source_status(i)
@@ -1321,7 +1550,8 @@ class BroadcastEngine:
                         self.silence_start = time.time()
                         self.is_silence = True
                     
-                    timeout = 5.0 if is_active_unreachable else CONFIG['settings'].get('loss_timeout_sec', 10.0)
+                    unreachable_to = float(CONFIG['settings'].get('unreachable_timeout_sec', 5))
+                    timeout = unreachable_to if is_active_unreachable else CONFIG['settings'].get('loss_timeout_sec', 10.0)
                     
                     if (time.time() - self.silence_start) > timeout:
                        old_idx = self.current_source_idx
@@ -1396,7 +1626,8 @@ class BroadcastEngine:
                         self.is_silence = True
                         self.manual_log_triggered = False # Ready to log a potential new failure
                     
-                    timeout = 5.0 if is_active_unreachable else CONFIG['settings'].get('loss_timeout_sec', 10.0)
+                    unreachable_to = float(CONFIG['settings'].get('unreachable_timeout_sec', 5))
+                    timeout = unreachable_to if is_active_unreachable else CONFIG['settings'].get('loss_timeout_sec', 10.0)
                     
                     # Unique log: We check that the timeout has expired AND that the log has not yet been generated
                     if (time.time() - self.silence_start) > timeout and not self.manual_log_triggered:
@@ -1459,37 +1690,44 @@ class BroadcastEngine:
         # If the buffer is still insufficient, clean silence is returned to avoid a NumPy crash.
         if len(self.audio_buffer) < frames:
             outdata.fill(0)
-            self.vu_data['sources'][self.current_source_idx]['l'] = -60.0
-            self.vu_data['sources'][self.current_source_idx]['r'] = -60.0
-            self.vu_data['out_l'] = -60.0
-            self.vu_data['out_r'] = -60.0
-            return
+            pk_src_l, pk_src_r, peak_l, peak_r = 0.0, 0.0, 0.0, 0.0
+        else:
+            # Extraction of the exact block size (Adapts to 441, 480, 1024, 2048, 4096, etc.)
+            data_to_process = self.audio_buffer[:frames]
+            self.audio_buffer = self.audio_buffer[frames:]
 
-        # Extraction of the exact block size (Adapts to 441, 480, 1024, 2048, 4096, etc.)
-        data_to_process = self.audio_buffer[:frames]
-        self.audio_buffer = self.audio_buffer[frames:]
-
-        gain_in = 10 ** (CONFIG['sources'][self.current_source_idx]['gain'] / 20.0)
-        input_sig = data_to_process * gain_in
-        
-        pk_src_l = np.max(np.abs(input_sig[:, 0])) if len(input_sig) > 0 else 0
-        pk_src_r = np.max(np.abs(input_sig[:, 1])) if len(input_sig) > 0 else 0
-        self.vu_data['sources'][self.current_source_idx]['l'] = float(20 * np.log10(pk_src_l) if pk_src_l > 0.00001 else -60.0)
-        self.vu_data['sources'][self.current_source_idx]['r'] = float(20 * np.log10(pk_src_r) if pk_src_r > 0.00001 else -60.0)
-
-        gain_out = 10 ** (CONFIG['audio']['output_gain_db'] / 20.0)
-        output_sig = input_sig * gain_out
-        np.clip(output_sig, -1.0, 1.0, out=output_sig)
-        
-        peak_l = np.max(np.abs(output_sig[:, 0])) if len(output_sig) > 0 else 0
-        peak_r = np.max(np.abs(output_sig[:, 1])) if len(output_sig) > 0 else 0
-        self.vu_data['out_l'] = float(20 * np.log10(peak_l) if peak_l > 0.00001 else -60.0)
-        self.vu_data['out_r'] = float(20 * np.log10(peak_r) if peak_r > 0.00001 else -60.0)
-        
-        if self.analysis_active:
-            socketio.emit('audio_analysis_data', {'samples': output_sig[:, 0].tolist()})
+            gain_in = 10 ** (CONFIG['sources'][self.current_source_idx]['gain'] / 20.0)
+            input_sig = data_to_process * gain_in
             
-        outdata[:] = output_sig
+            pk_src_l = np.max(np.abs(input_sig[:, 0])) if len(input_sig) > 0 else 0
+            pk_src_r = np.max(np.abs(input_sig[:, 1])) if len(input_sig) > 0 else 0
+
+            gain_out = 10 ** (CONFIG['audio']['output_gain_db'] / 20.0)
+            output_sig = input_sig * gain_out
+            np.clip(output_sig, -1.0, 1.0, out=output_sig)
+            
+            peak_l = np.max(np.abs(output_sig[:, 0])) if len(output_sig) > 0 else 0
+            peak_r = np.max(np.abs(output_sig[:, 1])) if len(output_sig) > 0 else 0
+            
+            if self.analysis_active:
+                socketio.emit('audio_analysis_data', {'samples': output_sig[:, 0].tolist()})
+                
+            outdata[:] = output_sig
+
+        # Delay VU meters update by the exact output buffer latency to perfectly sync UI with physical speakers
+        if not hasattr(self, 'vu_delay_queue'):
+            self.vu_delay_queue = []
+            
+        latency_sec = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
+        self.vu_delay_queue.append((time.time() + latency_sec, self.current_source_idx, pk_src_l, pk_src_r, peak_l, peak_r))
+        
+        now = time.time()
+        while len(self.vu_delay_queue) > 0 and self.vu_delay_queue[0][0] <= now:
+            _, src_idx, delayed_src_l, delayed_src_r, delayed_out_l, delayed_out_r = self.vu_delay_queue.pop(0)
+            self.vu_data['sources'][src_idx]['l'] = float(20 * np.log10(delayed_src_l) if delayed_src_l > 0.00001 else -60.0)
+            self.vu_data['sources'][src_idx]['r'] = float(20 * np.log10(delayed_src_r) if delayed_src_r > 0.00001 else -60.0)
+            self.vu_data['out_l'] = float(20 * np.log10(delayed_out_l) if delayed_out_l > 0.00001 else -60.0)
+            self.vu_data['out_r'] = float(20 * np.log10(delayed_out_r) if delayed_out_r > 0.00001 else -60.0)
 
 # --- 5. ENGINE INITIALISATION ---
 engine = BroadcastEngine()
@@ -1533,6 +1771,7 @@ def index():
             CONFIG['settings']['loss_timeout_sec'] = int(float(request.form.get('loss_time', 10)))
             CONFIG['settings']['recovery_threshold_db'] = float(request.form.get('rec_thresh'))
             CONFIG['settings']['recovery_timeout_sec'] = int(float(request.form.get('rec_time', 5)))
+            CONFIG['settings']['unreachable_timeout_sec'] = int(float(request.form.get('unreachable_timeout_sec', 5)))
 
             for i in range(3):
                 new_type = request.form.get(f'type{i}')
@@ -1542,6 +1781,7 @@ def index():
                 new_backup_file = request.form.get(f'backup_file{i}', '')
                 new_backup_mode = request.form.get(f'backup_mode{i}', 'single')
                 new_playlist_name = request.form.get(f'backup_playlist_name{i}', '')
+                new_schedule_name = request.form.get(f'schedule_name{i}', '')
                 new_playlist_shuffle = (request.form.get(f'backup_playlist_shuffle{i}') == 'on')
                 new_memorize_pos = (request.form.get(f'memorize_pos{i}') == 'on')
                 new_max_latency = int(request.form.get(f'max_latency_ms{i}', 6000))
@@ -1564,7 +1804,7 @@ def index():
                 src = CONFIG['sources'][i]
                 src['input_device'] = int(new_in_dev) if (new_in_dev and new_in_dev != 'None') else None
                 
-                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('max_latency_ms') != new_max_latency or src.get('sid') != new_sid or src.get('pid') != new_pid or
+                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('schedule_name') != new_schedule_name or src.get('max_latency_ms') != new_max_latency or src.get('sid') != new_sid or src.get('pid') != new_pid or
                     src.get('sat_ip') != new_sat_ip or src.get('sat_port') != new_sat_port or src.get('sat_src') != new_sat_src or src.get('sat_freq') != new_sat_freq or src.get('sat_pol') != new_sat_pol or src.get('sat_msys') != new_sat_msys or src.get('sat_sr') != new_sat_sr or
                     src.get('meta_export_method') != request.form.get(f'meta_export_method{i}', 'file') or
                     src.get('meta_tcp_ip') != request.form.get(f'meta_tcp_ip{i}', '127.0.0.1') or
@@ -1586,6 +1826,7 @@ def index():
                 src['backup_file'] = new_backup_file
                 src['backup_mode'] = new_backup_mode
                 src['backup_playlist_name'] = new_playlist_name
+                src['schedule_name'] = new_schedule_name
                 src['backup_playlist_shuffle'] = new_playlist_shuffle
                 src['memorize_pos'] = new_memorize_pos
                 src['max_latency_ms'] = new_max_latency
@@ -1593,7 +1834,7 @@ def index():
                 src['pid'] = new_pid
                 src['service_name'] = new_service_name
                 
-                if new_type in ['file', 'backup_dir']:
+                if new_type in ['file', 'backup_dir', 'scheduler']:
                     src['repeat'] = True
                 else:
                     src['repeat'] = (request.form.get(f'repeat{i}') == 'on')
@@ -1742,6 +1983,15 @@ def update_playlists():
     CONFIG['playlists'] = request.json.get('playlists', {})
     save_config(CONFIG)
     add_internal_log("Playlists updated.", "SYSTEM")
+    return jsonify({'status': 'ok'})
+
+@app.route('/update_schedules', methods=['POST'])
+def update_schedules():
+    if not session.get('logged_in'): return jsonify({'status': 'error'})
+    if session.get('role') != 'admin': return jsonify({'status': 'error'})
+    CONFIG['schedules'] = request.json.get('schedules', {})
+    save_config(CONFIG)
+    add_internal_log("Scheduler updated.", "SYSTEM")
     return jsonify({'status': 'ok'})
 
 @app.route('/api/audio_files')
@@ -2154,6 +2404,25 @@ def socket_emit_loop():
                 else: np_str = "Now playing: ..."
             elif src['type'] == 'tone':
                 np_str = "Now playing: Test Tone Generator"
+            elif src['type'] == 'scheduler':
+                sched_target = get_scheduled_target(src.get('schedule_name', ''))
+                t_str = ""
+                if sched_target:
+                    if sched_target.startswith('url:'): t_str = sched_target.split(':', 1)[1]
+                    elif sched_target.startswith('rtp_mpegts:'): t_str = "MPEG-TS"
+                    elif sched_target.startswith('rtp_sdp:'): t_str = "SDP"
+                    elif sched_target.startswith('file:'): t_str = os.path.basename(sched_target.split(':', 1)[1])
+                    elif sched_target.startswith('backup_file:'): t_str = sched_target.split(':', 1)[1]
+                    elif sched_target.startswith('playlist:'): t_str = f"Playlist {sched_target.split(':', 1)[1]}"
+                    elif sched_target.startswith('satip:'): t_str = "SAT>IP"
+                    elif sched_target.startswith('device:'): t_str = "Input Device"
+                    elif sched_target.startswith('tone:'): t_str = "Tone Generator"
+                    else: t_str = sched_target
+                
+                if engine.current_metadata_title:
+                    np_str = f"Now playing: SCHEDULED -> {t_str} ({engine.current_metadata_title})"
+                else:
+                    np_str = f"Now playing: SCHEDULED -> {t_str}" if t_str else "Now playing: ..."
             elif src['type'] == 'backup_dir':
                 # Fetch the filename directly from the metadata engine
                 if engine.current_metadata_title:
