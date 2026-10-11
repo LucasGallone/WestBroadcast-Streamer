@@ -570,7 +570,7 @@
                 <select id="sch-select" onchange="schSelect()" class="sch-clean-input" style="flex:1;">
                     <option value="">-- No schedule available. Please create one. --</option>
                 </select>
-                <button type="button" class="btn-sec sch-btn" onclick="schNew()" style="color:black; border-color:#ccc; background:#eee; border:1px solid #ccc !important;">Create New Schedule</button>
+                <button type="button" class="btn-sec sch-btn" onclick="schNew()" style="color:black; border-color:#ccc; background:#eee; border:1px solid #ccc !important;">Generate New Schedule</button>
                 <button type="button" class="btn-sec sch-btn" onclick="schDelete()" style="color:white; background:var(--danger);">Delete</button>
             </div>
         </div>
@@ -681,7 +681,7 @@
                 <div id="sch-list" style="border:1px solid #cbd5e1; background:#fff; height:240px; overflow-y:auto; margin-bottom:20px; border-radius:4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);"></div>
             </div>
             
-            <button type="button" class="modal-btn btn-blue" onclick="schSave()" style="margin-top:0;">Save Schedule</button>
+            <button type="button" class="modal-btn btn-blue" onclick="schSave()" style="margin-top:0;">Create & Save Schedule</button>
         </div>
         <button type="button" class="modal-btn btn-grey" onclick="document.getElementById('scheduler-modal').style.display='none'" style="margin-top: 10px;">Close</button>
     </div>
@@ -1499,8 +1499,13 @@
         let curSel = schCurrentEdit !== null ? schCurrentEdit : sel.value;
         sel.innerHTML = '';
         
+        // Always add placeholder to prevent dropdown visual bugs
+        let defaultOpt = document.createElement('option');
+        defaultOpt.value = "";
+        defaultOpt.innerText = Object.keys(globalSchedules).length === 0 ? "-- No schedule available. Please create one. --" : "-- Select a schedule --";
+        sel.appendChild(defaultOpt);
+        
         if (Object.keys(globalSchedules).length === 0) {
-            sel.innerHTML = '<option value="">-- No schedule available. Please create one. --</option>';
             document.getElementById('sch-editor').style.display = 'none';
         } else {
             let matchFound = false;
@@ -1511,8 +1516,8 @@
                 sel.appendChild(opt);
             }
             if (!matchFound) {
-                if (schCurrentEdit === "") sel.selectedIndex = -1;
-                else { sel.selectedIndex = 0; schSelect(); }
+                if (schCurrentEdit === "") sel.value = "";
+                else { sel.selectedIndex = 1; schSelect(); }
             }
         }
         
@@ -1773,9 +1778,8 @@
             delete globalSchedules[schCurrentEdit];
         }
         globalSchedules[newName] = schCurrentEvents;
-        schSaveToServer();
         schCurrentEdit = newName;
-        document.getElementById('sch-select').value = newName;
+        schSaveToServer();
         alert("Schedule saved successfully.");
     }
 
