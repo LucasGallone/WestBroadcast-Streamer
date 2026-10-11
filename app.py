@@ -348,10 +348,17 @@ def get_scheduled_target(schedule_name):
         target = ev.get('target', '')
         if not time_str or not target: continue
         
-        parts = time_str.split(':')
-        if len(parts) != 2: continue
-        try: ev_min = int(parts[0]) * 60 + int(parts[1])
-        except: continue
+        ev_min = None
+        time_clean = time_str.strip().upper()
+        for fmt in ('%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M:%S %p', '%I:%M%p', '%I:%M:%S%p'):
+            try:
+                t_obj = datetime.strptime(time_clean, fmt)
+                ev_min = t_obj.hour * 60 + t_obj.minute
+                break
+            except ValueError:
+                pass
+
+        if ev_min is None: continue
 
         days = []
         if day_str == 'Everyday': days = list(range(7))
@@ -527,10 +534,6 @@ class SourceChannel:
         if self.status_text == "UNREACHABLE":
             return "UNREACHABLE", "#8B0000"
 
-        # 2ND PRIORITY: Buffering status case
-        if self.is_reconnecting or self.status_text == "BUFFERING":
-            return "BUFFERING...", "#e67e22"
-
         src = CONFIG['sources'][self.index]
         
         is_hls = False
@@ -543,9 +546,11 @@ class SourceChannel:
                 
         timeout_limit = 15.0 if is_hls else 5.0
 
-        # 3RD PRIORITY: Data timeout during playback
-        if self.running and self.status_text == "PLAYING" and (time.time() - self.last_data_time > timeout_limit):
+        if self.running and (time.time() - self.last_data_time > timeout_limit):
              return "UNREACHABLE", "#8B0000"
+
+        if self.is_reconnecting or self.status_text == "BUFFERING":
+            return "BUFFERING...", "#e67e22"
 
         if src['type'] == 'stream' and not src['url']: return "NOT CONFIGURED", "#999"
         if src['type'] in ['rtp_mpegts', 'multiplex'] and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
@@ -580,9 +585,11 @@ class SourceChannel:
             return "UNREACHABLE", "#8B0000"
 
         # Inactive management (for backups when they're not being called upon)
-        if self.running and self.status_text == "PLAYING":
-            if is_silence_detected: return "SILENT", "#8B0000" # Display SILENT status even if the source is not played
-            return "READY TO PLAY", "#666"
+        if self.running:
+            if self.status_text == "BUFFERING": return "BUFFERING...", "#e67e22"
+            if self.status_text == "PLAYING":
+                if is_silence_detected: return "SILENT", "#8B0000" # Display SILENT status even if the source is not played
+                return "READY TO PLAY", "#666"
         
         if self.status_text == "UNREACHABLE": return "UNREACHABLE", "#8B0000"
         return "READY TO PLAY", "#666"
@@ -881,8 +888,6 @@ class SourceChannel:
                 if self.process.poll() is not None:
                     raise Exception("Process died immediately")
                 
-                self.status_text = "PLAYING"
-                self.play_start_time = time.time()
                 self.last_data_time = time.time()
 
                 while self.running:
@@ -892,6 +897,10 @@ class SourceChannel:
                         time.sleep(0.01)
                         continue
                     
+                    if self.status_text == "BUFFERING":
+                        self.status_text = "PLAYING"
+                        self.play_start_time = time.time()
+                        
                     self.last_data_time = time.time()
                     
                     if active_type == 'scheduler':
@@ -1479,7 +1488,7 @@ class BroadcastEngine:
                 
                 tech_timeout = 15.0 if is_hls else 5.0
 
-                if ch.running and ch.status_text == "PLAYING" and (time.time() - ch.last_data_time > tech_timeout):
+                if ch.running and ch.status_text in ["PLAYING", "BUFFERING"] and (time.time() - ch.last_data_time > tech_timeout):
                      if ch.process:
                          try: ch.process.kill()
                          except: pass
@@ -1863,6 +1872,7 @@ def index():
                 src['type'] = new_type
                 src['url'] = new_url
                 src['rtp_uri'] = new_uri
+                src['path'] = new_path
                 src['sat_ip'] = new_sat_ip
                 src['sat_port'] = new_sat_port
                 src['sat_src'] = new_sat_src
