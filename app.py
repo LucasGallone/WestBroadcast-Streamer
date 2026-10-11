@@ -771,6 +771,46 @@ class SourceChannel:
                     self.current_sched_target = sched_target
                 else:
                     self.status_text = "NO CONFIG"
+            elif src['type'] == 'file':
+                if src['path'] and os.path.exists(src['path']):
+                    valid = True
+                    target_path = src['path']
+                    start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
+                    ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                    cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', src['path']] + filter_arg
+                else:
+                    self.status_text = "FILE ERROR"
+            elif src['type'] == 'backup_dir':
+                if src.get('backup_mode', 'single') == 'single':
+                    bpath = os.path.join(BACKUP_DIR, src.get('backup_file', ''))
+                    if src.get('backup_file') and os.path.exists(bpath):
+                        valid = True
+                        target_path = bpath
+                        start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
+                        ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                        cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
+                    else:
+                        self.status_text = "FILE ERROR"
+                else:
+                    playlist = CONFIG.get('playlists', {}).get(src.get('backup_playlist_name', ''), [])
+                    if playlist:
+                        if src.get('backup_playlist_shuffle') and len(playlist) > 0:
+                            self.playlist_idx = int(np.random.randint(0, len(playlist)))
+                        elif getattr(self, 'playlist_idx', 0) >= len(playlist):
+                            self.playlist_idx = 0
+                        p_idx = self.playlist_idx
+                        bpath = os.path.join(BACKUP_DIR, playlist[p_idx])
+                        if os.path.exists(bpath):
+                            valid = True
+                            target_path = bpath
+                            start_pos = self.saved_positions.get(target_path, 0.0) if memorize else 0.0
+                            ss_arg = ['-ss', str(start_pos)] if start_pos > 0 else []
+                            cmd =[ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re'] + ss_arg + ['-i', bpath] + filter_arg
+                        else:
+                            self.status_text = "FILE ERROR"
+                            self.playlist_idx += 1
+                    else:
+                        self.status_text = "FILE ERROR"
             elif src['type'] in ['rtp_mpegts', 'multiplex']:
                 if src['rtp_uri']:
                     valid = True
@@ -890,8 +930,8 @@ class SourceChannel:
                     int16_data = np.frombuffer(raw, dtype=np.int16).reshape(-1, CHANNELS)
                     float_data = int16_data.astype(np.float32) / 32768.0
                     
-                    # Target Buffer / Catch-up logic for live sources
-                    if src['type'] not in ['file', 'backup_dir', 'tone']:
+                    # Live sources (no '-re' flag): apply catch-up logic
+                    if '-re' not in cmd:
                         target_ms = src.get('max_latency_ms', 6000)
                         max_items = int((target_ms / 1000.0) * SAMPLE_RATE / BLOCK_SIZE)
                         if max_items < 1: max_items = 1
@@ -902,10 +942,16 @@ class SourceChannel:
                                 try: self.queue.get_nowait()
                                 except queue.Empty: break
 
-                    if not self.queue.full():
-                        self.queue.put(float_data)
+                        if not self.queue.full():
+                            self.queue.put(float_data)
+                        else:
+                            time.sleep(0.005)
                     else:
-                        time.sleep(0.005)
+                        # Files / Tones (with '-re' flag): Blocking put to prevent frame drops and stuttering
+                        while self.queue.full() and self.running:
+                            time.sleep(0.005)
+                        if self.running:
+                            self.queue.put(float_data)
 
             except Exception as e:
                 self.status_text = "UNREACHABLE"
@@ -1572,6 +1618,7 @@ class BroadcastEngine:
                            elif s['type'] == 'backup_dir':
                                if s.get('backup_mode', 'single') == 'single' and s.get('backup_file'): is_conf = True
                                elif s.get('backup_mode', 'single') == 'playlist' and s.get('backup_playlist_name'): is_conf = True
+                           elif s['type'] == 'scheduler' and s.get('schedule_name'): is_conf = True
                            elif s['type'] == 'tone': is_conf = True
                            elif s['type'] == 'device' and s.get('input_device') is not None: is_conf = True
                         
@@ -2214,15 +2261,16 @@ def set_mode():
             elif s['type'] == 'backup_dir':
                 if s.get('backup_mode', 'single') == 'single' and s.get('backup_file') and os.path.exists(os.path.join(BACKUP_DIR, s.get('backup_file'))): is_conf = True
                 elif s.get('backup_mode', 'single') == 'playlist' and s.get('backup_playlist_name'): is_conf = True
+            elif s['type'] == 'scheduler' and s.get('schedule_name'): is_conf = True
             elif s['type'] == 'tone': is_conf = True
             elif s['type'] == 'device' and s.get('input_device') is not None: is_conf = True
             
             if not is_conf: continue
             
-            if s['type'] in ['file', 'backup_dir', 'tone']:
+            if s['type'] in ['file', 'backup_dir', 'scheduler', 'tone']:
                 best_idx = i
                 break
-                
+            
             ch = engine.channels[i]
             vu = max(engine.vu_data['sources'][i]['l'], engine.vu_data['sources'][i]['r'])
             thresh = float(CONFIG['settings'].get('loss_threshold_db', -60.0))
