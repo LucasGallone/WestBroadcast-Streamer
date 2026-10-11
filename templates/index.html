@@ -1604,8 +1604,24 @@
         let chks = document.querySelectorAll('.sch-day-chk:checked');
         if(chks.length === 0) { alert("Please select at least one day."); return; }
         
-        let time = document.getElementById('sch-time').value;
+        let time = document.getElementById('sch-time').value.trim();
         if(!time) { alert("Time is required."); return; }
+        
+        let ampmMatch = time.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+        if (ampmMatch) {
+            let h = parseInt(ampmMatch[1], 10);
+            let m = ampmMatch[2];
+            let isPm = ampmMatch[3].toUpperCase() === 'PM';
+            if (isPm && h < 12) h += 12;
+            if (!isPm && h === 12) h = 0;
+            time = (h < 10 ? '0' : '') + h + ':' + m;
+        } else {
+            let secMatch = time.match(/^(\d{1,2}):(\d{2}):\d{2}$/);
+            if (secMatch) {
+                let h = parseInt(secMatch[1], 10);
+                time = (h < 10 ? '0' : '') + h + ':' + secMatch[2];
+            }
+        }
         
         let type = document.getElementById('sch-target-type').value;
         let target = "";
