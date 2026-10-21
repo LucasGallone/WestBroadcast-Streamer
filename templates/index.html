@@ -3138,7 +3138,7 @@
             return text;
         };
 
-        // Interception sécurisée des popups Javascript
+        // Secure interception of JavaScript popups
         const originalAlert = window.alert;
         window.alert = function(msg) { originalAlert(translate(msg)); };
         const originalConfirm = window.confirm;
@@ -3150,7 +3150,7 @@
                     let replaced = translate(node.nodeValue);
                     if(replaced !== node.nodeValue) node.nodeValue = replaced;
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
-                    // Parcours des textes
+                    // Exploring the texts
                     const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false);
                     let childNode;
                     while(childNode = walker.nextNode()) {
@@ -3158,7 +3158,7 @@
                         if(replaced !== childNode.nodeValue) childNode.nodeValue = replaced;
                     }
                     
-                    // Traduction ciblée des attributs HTML spécifiques
+                    // Targeted translation of specific HTML attributes
                     node.querySelectorAll('[data-tooltip]').forEach(el => {
                         let replaced = translate(el.getAttribute('data-tooltip'));
                         if(replaced !== el.getAttribute('data-tooltip')) el.setAttribute('data-tooltip', replaced);
@@ -3176,10 +3176,10 @@
                 }
             };
 
-            // Traduction initiale du document complet
+            // Initial translation of the complete document
             translateNode(document.body);
 
-            // Observateur de mutations pour capturer instantanément et traduire les éléments dynamiques (Logs, listes...) sans modifier les fonctions JS
+            // Mutation observer to instantly capture and translate dynamic elements (logs, lists, etc.) without modifying JS functions
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach(mutation => {
                     mutation.addedNodes.forEach(node => translateNode(node));
