@@ -73,7 +73,6 @@ if "%IS_FR%"=="1" (
     echo.
 )
 
-:: 6. Démarrage de l'application principale
 python app.py
 
 echo.
