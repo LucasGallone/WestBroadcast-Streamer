@@ -2572,11 +2572,11 @@ def start_gui():
     except:
         pass
         
-    # Verrouillage du redimensionnement de la fenetre
+    # Locking the software window's resize capability
     root.resizable(False, False)
     win_w, win_h = 620, 240
     
-    # Restauration de la derniere position ou centrage initial automatique
+    # Restoration of the last position or automatic initial centering
     saved_x = CONFIG['server'].get('window_x')
     saved_y = CONFIG['server'].get('window_y')
     
@@ -2595,7 +2595,7 @@ def start_gui():
         
     root.configure(bg="#eef2f5")
     
-    # Memorisation continue des coordonnees lors du deplacement de la fenetre
+    # Continuous recording of coordinates while moving the window
     def on_window_move(event):
         if event.widget == root:
             CONFIG['server']['window_x'] = root.winfo_x()
@@ -2650,7 +2650,7 @@ def start_gui():
                 
                 status_str, color = engine.get_source_status(i)
                 
-                # Noir pour les sources non configurees, couleurs vives pour les autres statuts
+                # Status Indicators: Black for unconfigured sources, bright colors for other statuses
                 if status_str in ["NOT CONFIGURED", "NO CONFIG"]:
                     display_color = "#000000"
                 elif color == "#006400": display_color = "#28a745"
