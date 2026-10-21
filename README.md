@@ -22,7 +22,7 @@ Any feedback regarding other operating systems is welcome!
 
 ![wbcast-streamer-1](https://github.com/user-attachments/assets/2e544432-b65b-4c47-a677-1f6f809fbac9)
 ![interface-readme-2](https://github.com/user-attachments/assets/732b4156-a544-4d11-8df0-16429662a0f5)
-## What this tool offers
+## ⚡ What this tool offers
 • Full control over the reception and playback of audio sources via a secure and remotely controllable webserver with two different accounts (Administrator and Operator). Monitoring of input and output audio thanks to VU meters.
 <br>
 <br>
@@ -48,7 +48,16 @@ Any feedback regarding other operating systems is welcome!
 <br>
 <br>
 👉 For further details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
-## 1. Installation instructions for Windows
+## 💬 Available languages
+WestBroadcast Streamer is available in English and French.
+<br>
+There are currently no plans to add other languages, in order to ensure the quality of the translation.
+<br>
+<br>
+If you would like to contribute a translation for a language **you are a native speaker of**, please feel free to do so.
+<br>
+Any contribution is appreciated and welcome.
+## ⚙️ 1. Installation instructions for Windows
 -> [Download the entire content of the repository by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/archive/refs/heads/main.zip)
 <br>
 <br>
@@ -75,7 +84,7 @@ Even if nothing appears to be happening on the terminal, please wait until the p
 A Python window will open, displaying your machine's IP address, the port used by the webserver, and the default login credentials.
 <br>
 Be sure to keep this window open on the host machine (it's used for audio output), as well as the terminal!
-## 2. Configuration
+## ⚙️ 2. Configuration
 You must configure the decoder via the web interface.
 <br>
 The default port is 8090 and the credentials are admin / admin.
@@ -84,7 +93,7 @@ The default port is 8090 and the credentials are admin / admin.
 <br>
 <br>
 For more details, [visit the Wiki section by clicking here.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki)
-## 3. Starting the decoder after the initial setup
+## 🚀 3. Starting the decoder after the initial setup
 For the next startups, simply run `Launch.bat` as you did during the initial installation.
 <br>
 At each startup, the script checks that all required dependencies are present on your machine, then starts the audio engine and the webserver.
@@ -92,20 +101,11 @@ At each startup, the script checks that all required dependencies are present on
 Having trouble with the software? [Check out this Wiki section to see if that helps.](https://github.com/LucasGallone/WestBroadcast-Streamer/wiki/%F0%9F%92%A1-Troubleshooting)
 <br>
 If not, feel free to open an "issue" with as much detail as possible.
-## Legal Notices and Licenses
+## ⚖️ Legal Notices and Licenses
 ### WestBroadcast Streamer
 This project is licensed under the GNU General Public License (GPL) v3.0.
 <br>
 Please refer to the `LICENSE` file for more details.
-## Available languages
-WestBroadcast Streamer is available in English and French.
-<br>
-There are currently no plans to add other languages, in order to ensure the quality of the translation.
-<br>
-<br>
-If you would like to contribute a translation for a language **you are a native speaker of**, please feel free to do so.
-<br>
-Any contribution is appreciated and welcome.
 - - -
 ### FFmpeg and FFprobe
 This project uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
