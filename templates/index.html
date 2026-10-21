@@ -5,6 +5,9 @@
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <title>WestBroadcast Streamer{% if (not login_needed or not cfg.server.hide_bg_on_login) and cfg.server.instance_name %} - {{ cfg.server.instance_name }}{% endif %}</title>
     <script src="{{ url_for('static', filename='socket.io.js') }}"></script>
+    <script>
+        const APP_LANG = "{{ cfg.server.language | default('en') }}";
+    </script>
     <style>
         :root { --bg: #eef2f5; --panel: #dae6f0; --blue: #3c8dbc; --meter-bg: #111; --danger: #d9534f; --success: #5cb85c; --info-blue: #2196F3; }
         body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; background-color: var(--bg); color: #333; }
@@ -232,7 +235,7 @@
 
 {% if login_needed %}
 <div class="modal" style="display:flex;">
-    <div class="modal-box">
+    <div class="modal-box" style="width: 400px; max-width: 95%;">
         <h2>Please log in to access the interface</h2>
         {% if login_error %}
         <div style="color: red; margin-bottom: 15px; font-weight: bold;">Access denied: Invalid credentials.</div>
@@ -275,6 +278,13 @@
                 <div class="form-row" style="justify-content: flex-start; gap: 10px; margin-top: 10px;">
                     <input type="checkbox" name="monitor_cpu" style="flex:0; width:auto!important; margin:0;" {% if cfg.server.monitor_cpu_ram %}checked{% endif %}>
                     <label style="flex:none; width:auto;">Enable CPU / RAM monitoring on the host machine</label>
+                </div>
+                <div class="form-row" style="justify-content: flex-start; gap: 10px; margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px;">
+                    <label style="flex:0 0 200px;">Interface Language:</label>
+                    <select name="language" style="width: 150px;">
+                        <option value="en" {% if cfg.server.language == 'en' or not cfg.server.language %}selected{% endif %}>English</option>
+                        <option value="fr" {% if cfg.server.language == 'fr' %}selected{% endif %}>Français</option>
+                    </select>
                 </div>
             </div>
 
@@ -651,20 +661,19 @@
                                     <select id="sch-sat-src" class="sch-clean-input" style="flex: 1;"><option value="1">Src 1</option><option value="2">Src 2</option></select>
                                 </div>
                                 <div style="display: flex; gap: 6px;">
-                                    <input type="number" id="sch-sat-freq" placeholder="Freq" value="11515" class="sch-clean-input" style="flex: 2;">
-                                    <select id="sch-sat-pol" class="sch-clean-input" style="flex: 1;"><option value="v">V</option><option value="h">H</option></select>
-                                    <select id="sch-sat-msys" class="sch-clean-input" style="flex: 1.4;"><option value="dvbs">DVB-S</option><option value="dvbs2">DVB-S2</option></select>
-                                    <input type="number" id="sch-sat-sr" placeholder="SR" value="4000" class="sch-clean-input" style="flex: 2;">
+                                    <input type="number" id="sch-sat-freq" placeholder="Freq" value="11515" class="sch-clean-input" style="flex: 1.5;">
+                                    <select id="sch-sat-pol" class="sch-clean-input" style="flex: 0.8; padding: 0 4px !important;"><option value="v">V</option><option value="h">H</option></select>
+                                    <select id="sch-sat-msys" class="sch-clean-input" style="flex: 2.2; min-width: 95px; padding: 0 6px !important;"><option value="dvbs">DVB-S</option><option value="dvbs2">DVB-S2</option></select>
+                                    <input type="number" id="sch-sat-sr" placeholder="SR" value="4000" class="sch-clean-input" style="flex: 1.5;">
                                 </div>
-                                <div style="display: flex; gap: 6px;">
-                                    <input type="text" id="sch-sat-sid" placeholder="SID (Leave blank for none)" class="sch-clean-input" style="flex: 1;">
-                                    <input type="text" id="sch-sat-pid" placeholder="PID (Leave blank for none)" class="sch-clean-input" style="flex: 1;">
-                                </div>
+                                <input type="text" id="sch-sat-sid" placeholder="SID (Leave blank for none)" class="sch-clean-input">
+                                <input type="text" id="sch-sat-pid" placeholder="PID (Leave blank for none)" class="sch-clean-input">
                             </div>
                             
-                            <div id="sch-target-tone" style="display: none; gap: 6px;">
-                                <input type="number" id="sch-tone-freq" placeholder="Frequency (Hz)" value="1000" class="sch-clean-input" style="flex: 1;">
-                                <select id="sch-tone-wave" class="sch-clean-input" style="flex: 1;">
+                            <div id="sch-target-tone" style="display: none; gap: 6px; align-items: center;">
+                                <input type="number" id="sch-tone-freq" value="1000" class="sch-clean-input" style="flex: 1;">
+                                <span style="font-weight: bold; color: #555; font-size: 0.9rem;">Hz</span>
+                                <select id="sch-tone-wave" class="sch-clean-input" style="flex: 1.2;">
                                     <option value="sine">Sine</option>
                                     <option value="square">Square</option>
                                 </select>
@@ -731,6 +740,7 @@
                 <button onclick="document.getElementById('sys-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Restart / Restore</button>
                 {% endif %}
                 <a href="/logout">Logout</a>
+                <div style="border-top: 1px solid #eee; padding: 6px 15px; text-align: right; font-size: 0.75rem; color: #888; user-select: none;">Version 1.8</div>
             </div>
         </div>
         {% endif %}
@@ -1153,7 +1163,7 @@
             </div>
             {% endif %}
         </div>
-        <div class="footer-bar"><button type="submit" class="save-btn">Save changes and apply configuration</button></div>
+        <div class="footer-bar"><button type="submit" class="save-btn"{% if cfg.server.language == 'fr' %} style="width: 408px;"{% endif %}>Save changes and apply configuration</button></div>
     </form>
     {% endif %}
 </div>
@@ -1404,7 +1414,7 @@
     function pmNewPlaylist() {
         pmCurrentEdit = "";
         document.getElementById('pm-select').value = "";
-        document.getElementById('pm-name').value = "New Playlist";
+        document.getElementById('pm-name').value = (APP_LANG === 'fr') ? "Nouvelle Playlist" : "New Playlist";
         pmCurrentFiles = [];
         document.getElementById('pm-editor').style.display='block';
         pmRenderList();
@@ -1549,7 +1559,7 @@
     function schNew() {
         schCurrentEdit = "";
         document.getElementById('sch-select').value = "";
-        document.getElementById('sch-name').value = "New Schedule";
+        document.getElementById('sch-name').value = (APP_LANG === 'fr') ? "Nouvelle Planification" : "New Schedule";
         schCurrentEvents = [];
         document.getElementById('sch-editor').style.display='block';
         schRenderList();
@@ -1580,6 +1590,7 @@
             document.getElementById('sch-target-text').style.display = 'block';
             let ph = "";
             if (type === 'url') ph = "http://...";
+            else ph = (APP_LANG === 'fr') ? "Chemin" : "Path";
             document.getElementById('sch-target-text').placeholder = ph;
         } else if (type === 'backup_file') {
             document.getElementById('sch-target-file').style.display = 'block';
@@ -1743,7 +1754,9 @@
         });
 
         const dayMap = {"Monday":1, "Tuesday":2, "Wednesday":3, "Thursday":4, "Friday":5, "Saturday":6, "Sunday":7};
-        const shortDays = {"Monday":"Mon", "Tuesday":"Tue", "Wednesday":"Wed", "Thursday":"Thu", "Friday":"Fri", "Saturday":"Sat", "Sunday":"Sun"};
+        const shortDays = (APP_LANG === 'fr')
+            ? {"Monday":"Lun", "Tuesday":"Mar", "Wednesday":"Mer", "Thursday":"Jeu", "Friday":"Ven", "Saturday":"Sam", "Sunday":"Dim"}
+            : {"Monday":"Mon", "Tuesday":"Tue", "Wednesday":"Wed", "Thursday":"Thu", "Friday":"Fri", "Saturday":"Sat", "Sunday":"Sun"};
 
         let groupArr = Object.values(groups);
         groupArr.sort((a, b) => a.time.localeCompare(b.time));
@@ -1751,7 +1764,7 @@
         groupArr.forEach((g) => {
             g.days.sort((a, b) => dayMap[a] - dayMap[b]);
             let daysDisplay = g.days.map(d => shortDays[d]).join(', ');
-            if (g.days.length === 7) daysDisplay = "Everyday";
+            if (g.days.length === 7) daysDisplay = (APP_LANG === 'fr') ? "Tous les jours" : "Everyday";
 
             let displayTarget = g.target;
             if (displayTarget.startsWith('backup_file:')) displayTarget = "Backup Directory File: " + displayTarget.substring(12);
@@ -2177,8 +2190,27 @@
         document.getElementById('dig-' + prefix + '-r').innerText = txtR;
     }
 
+    const fr_status = {
+        "PLAYING": "EN COURS DE LECTURE",
+        "SILENT": "SILENCE DÉTECTÉ",
+        "UNREACHABLE": "INACCESSIBLE",
+        "BUFFERING...": "CHARGEMENT...",
+        "READY TO PLAY": "PRÊTE À ÊTRE JOUÉE",
+        "NOT CONFIGURED": "NON CONFIGURÉE",
+        "FILE NOT FOUND": "INTROUVABLE",
+        "NO CONFIG": "AUCUNE CONFIGURATION"
+    };
+
     socket.on('status_update', function(data) {
-        document.getElementById('uptime-txt').innerText = "Uptime: " + data.uptime;
+        if (APP_LANG === 'fr') {
+            document.getElementById('uptime-txt').innerText = "Durée de fonctionnement : " + data.uptime.replace('d ', 'j ');
+            if (data.now_playing) {
+                data.now_playing = data.now_playing.replace("Now playing:", "En cours de lecture :");
+                data.now_playing = data.now_playing.replace("SCHEDULED ->", "PLANIFIÉ ->");
+            }
+        } else {
+            document.getElementById('uptime-txt').innerText = "Uptime: " + data.uptime;
+        }
         
         let sysMetrics = document.getElementById('sys-metrics');
         if (data.cpu !== null && data.ram !== null && data.cpu !== undefined) {
@@ -2195,7 +2227,7 @@
             
             let status = data.src_statuses[i];
             let badge = document.getElementById('badge-'+i);
-            badge.innerText = status[0];
+            badge.innerText = (APP_LANG === 'fr' && fr_status[status[0]]) ? fr_status[status[0]] : status[0];
             badge.style.background = status[1];
 
             let codecSpan = document.getElementById('codec-'+i);
@@ -2727,5 +2759,435 @@
 </script>
 {% endif %}
 {% endif %}
+
+<script>
+    const fr_dict = {
+        "WestBroadcast Streamer - Audio over IP Decoder with Backup Sources": "WestBroadcast Streamer - Décodeur Audio sur IP avec Sources de Secours",
+        "Main Source": "Source Principale",
+        "Backup Source 1": "Source de Secours 1",
+        "Backup Source 2": "Source de Secours 2",
+        "Please log in to access the interface": "Veuillez vous connecter pour accéder à l'interface",
+        "Access denied: Invalid credentials.": "Accès refusé : Identifiants incorrects.",
+        "Too many failed login attempts.": "Trop de tentatives de connexion échouées \:",
+        "You must wait 90 seconds before trying again.": "Blocage temporaire de l'interface pendant 90 secondes.",
+        "Username": "Nom d'utilisateur",
+        "Password": "Mot de passe",
+        "Login": "Connexion",
+        "Webserver Settings": "Paramètres du serveur",
+        "General Settings": "Paramètres généraux",
+        "Instance Name (Optional):": "Nom de l'instance (Optionnel) :",
+        "HTTP Port (Restart required):": "Port HTTP :",
+        "Hide VU meters, instance name and \"Now Playing\" status when logged out": "Masquer les VU-mètres, le nom d'instance et le statut lors de la déconnexion",
+        "Enable the Peak Hold function on the VU meters": "Activer la fonction Peak Hold sur les VU-mètres",
+        "-> Peak Hold Time (seconds):": "-> Temps de maintien des indicateurs (secondes) :",
+        "Enable CPU / RAM monitoring on the host machine": "Activer la surveillance CPU / RAM de la machine hôte",
+        "Interface Language:": "Langue de l'interface :",
+        "Administrator Account": "Compte Administrateur",
+        "Username:": "Nom d'utilisateur :",
+        "Password:": "Mot de passe :",
+        "Operator Account": "Compte Opérateur",
+        "Enabled:": "Activé :",
+        "Allow access to the \"Audio Output / Loss & Recovery\" functions": "Accès aux fonctions \"Sortie Audio / Perte & Rétablissement\"",
+        "Allow access to the \"Backup Audio Sources\" section": "Accès à la section \"Fichiers de Secours\"",
+        "Allow access to the \"FM Settings\" section": "Accès à la section \"Paramètres FM\"",
+        "Allow server restart via the operator account": "Autoriser le redémarrage du serveur",
+        "Save Changes": "Enregistrer les modifications",
+        "Cancel": "Annuler",
+        "Close": "Fermer",
+        "System Management": "Gestion du système",
+        "Restart": "Redémarrer",
+        "Factory Reset": "Réinitialisation d'usine",
+        "Configuration Backup": "Sauvegarde de la configuration",
+        "Export Configuration File": "Exporter la configuration",
+        "Import Configuration": "Importer une configuration",
+        "Import Configuration File & Restart": "Importer et redémarrer",
+        "SMTP Settings (To send automated email alerts)": "Paramètres SMTP (Alertes par mail)",
+        "Click here to enable or disable the SMTP service:": "Activer / Désactiver le service SMTP :",
+        "Sender Account Configuration": "Compte expéditeur",
+        "SMTP Host:": "Hôte SMTP :",
+        "SMTP Port:": "Port SMTP :",
+        "SMTP Username:": "Nom d'utilisateur :",
+        "SMTP Password:": "Mot de passe :",
+        "Sender Email:": "Adresse mail :",
+        "Use TLS Protocol:": "Protocole TLS :",
+        "Delay before sending an alert (seconds):": "Délai avant alerte (secondes) :",
+        "Interval between alert emails (minutes):": "Intervalle anti-spam (minutes) :",
+        "Recipients": "Destinataires",
+        "Email 1:": "Mail 1 :",
+        "Email 2:": "Mail 2 :",
+        "Email 3:": "Mail 3 :",
+        "Email 4:": "Mail 4 :",
+        "Send Test Email": "Envoyer un mail de test",
+        "SMTP Host not configured.\n\nIf you have just configured the service, you must click on \"Save changes\" BEFORE performing a test.": "Hôte SMTP non configuré.\n\nSi vous venez de configurer le service, vous devez cliquer sur \"Enregistrer les modifications\" AVANT d'effectuer un test.",
+        "No recipients configured.\nPlease verify your configuration and try again.": "Aucun destinataire configuré.\nVeuillez vérifier votre configuration et réessayer.",
+        "Test OK. The connection to the SMTP server was successful.": "Test réussi. La connexion au serveur SMTP a été établie avec succès.",
+        "An error occurred while communicating with the server.": "Une erreur est survenue lors de la communication avec le serveur.",
+        "System and Authentication Logs": "Journaux Système & Authentification (Logs)",
+        "All Events": "Tous",
+        "Info": "Info",
+        "Warnings": "Avertissements",
+        "Recovery": "Rétablissement",
+        "Errors": "Erreurs",
+        "System": "Système",
+        "Auth": "Auth",
+        "Refresh": "Actualiser",
+        "Export all events to text file": "Exporter vers un fichier texte",
+        "Clear": "Effacer",
+        "Timestamp": "Horodatage",
+        "Type": "Type",
+        "Event": "Événement",
+        "Backup Audio Files & Playlists Manager": "Gestionnaire des fichiers de secours",
+        "Audio Files": "Fichiers Audio",
+        "Upload File(s)": "Importer des fichiers",
+        "Upload Selected File(s)": "Importer",
+        "Add files from a folder": "Importer depuis un dossier",
+        "Upload Folder Content": "Importer le dossier",
+        "Filename": "Nom du fichier",
+        "Delete Selection": "Supprimer la sélection",
+        "Delete": "Supprimer",
+        "No files uploaded yet.": "Aucun fichier disponible.",
+        "Playlists": "Playlists",
+        "-- No playlist available. Please create one. --": "-- Aucune playlist disponible. --",
+        "Create New Playlist": "Créer une Playlist",
+        "Delete Playlist": "Supprimer la Playlist",
+        "New Playlist": "Nouvelle Playlist",
+        "Empty": "Vide",
+        "Name:": "Nom :",
+        "Edit": "Modifier",
+        "Everyday": "Tous les jours",
+        "No events scheduled.": "Aucun événement planifié.",
+        "Mon": "Lun",
+        "Tue": "Mar",
+        "Wed": "Mer",
+        "Thu": "Jeu",
+        "Fri": "Ven",
+        "Sat": "Sam",
+        "Sun": "Dim",
+        "-- Select a playlist --": "-- Sélectionner une playlist --",
+        "Freq": "Fréq.",
+        "Frequency (Hz)": "Fréquence (Hz)",
+        "IP Address": "Adresse IP",
+        "e.g. 3632": "Exemple : 3632",
+        "(Overrides SID if used)": "(Écrase le SID si utilisé)",
+        "SID (Leave blank for none)": "SID (Laisser vide si aucun)",
+        "PID (Leave blank for none)": "PID (Laisser vide si aucun)",
+        "Indicate it here.": "Indiquez-le ici.",
+        "INPUT DEVICE": "PÉRIPHÉRIQUE D'ENTRÉE",
+        "IP STREAM": "FLUX IP",
+        "UNKNOWN": "INCONNU",
+        "sine": "sinusoïdale",
+        "square": "carrée",
+        "Select one or multiple files (Hold CTRL/CMD or Shift):": "Sélectionnez vos fichiers :",
+        "Add": "Ajouter",
+        "Save Playlist": "Enregistrer la Playlist",
+        "Scheduler (Planned Events)": "Planificateur d'événements",
+        "-- Select a schedule --": "-- Sélectionner une planification --",
+        "Generate New Schedule": "Nouvelle planification",
+        "Create / Modify events for this schedule": "Créer / Modifier des événements",
+        "Days": "Jours",
+        "Toggle All Days": "Cocher / Décocher tout",
+        "Monday": "Lundi",
+        "Tuesday": "Mardi",
+        "Wednesday": "Mercredi",
+        "Thursday": "Jeudi",
+        "Friday": "Vendredi",
+        "Saturday": "Samedi",
+        "Sunday": "Dimanche",
+        "Time": "Heure",
+        "Source Type": "Type de source",
+        "IP Stream (HTTP / HTTPS)": "Flux IP (HTTP / HTTPS)",
+        "RTP Stream (Via MPEG-TS)": "Flux RTP (MPEG-TS)",
+        "RTP Stream (Via SDP File)": "Flux RTP (Fichier SDP)",
+        "Satellite Stream (SAT>IP)": "Flux Satellite (SAT>IP)",
+        "Satellite Stream (SAT>IP / MPEG-TS)": "Flux Satellite (SAT>IP / MPEG-TS)",
+        "Audio Input Device": "Entrée Audio (Carte Son)",
+        "Local File": "Fichier Local",
+        "Backup Audio Directory": "Répertoire de fichiers",
+        "Uploaded File": "Fichier importé",
+        "Playlist": "Playlist",
+        "Test Tone Generator": "Générateur de tonalité",
+        "Action / Source Details": "Cible / Détails",
+        "-- Select File --": "-- Sélectionner --",
+        "-- Select Playlist --": "-- Sélectionner --",
+        "-- Select Device --": "-- Sélectionner --",
+        "Add Event": "Ajouter l'événement",
+        "Create & Save Schedule": "Enregistrer la planification",
+        "Uptime: ...": "Durée de fonctionnement : ...",
+        "Backup Audio Files": "Fichiers de Secours",
+        "Scheduler": "Planificateur",
+        "Audio Analysis": "Analyse Audio",
+        "Logs": "Journaux (Logs)",
+        "Restart / Restore": "Redémarrer / Restaurer",
+        "Logout": "Déconnexion",
+        "Output": "Sortie",
+        "FORCED": "FORCÉE MANUELLEMENT",
+        "Force Source": "Forcer manuellement cette source",
+        "AUTOMATIC MODE ENABLED": "MODE AUTOMATIQUE ACTIVÉ",
+        "Enable Automatic Mode": "Activer le mode automatique",
+        "Automatic mode disabled!": "Mode automatique désactivé !",
+        "Automatic mode disabled! Main Source selected manually.": "Mode automatique désactivé ! Source Principale sélectionnée manuellement.",
+        "Automatic mode disabled! Backup Source 1 selected manually.": "Mode automatique désactivé ! Source de Secours 1 sélectionnée manuellement.",
+        "Automatic mode disabled! Backup Source 2 selected manually.": "Mode automatique désactivé ! Source de Secours 2 sélectionnée manuellement.",
+        "Target IP Address:": "Adresse IP cible :",
+        "Target Port:": "Port cible :",
+        "Prefix Format:": "Format du préfixe :",
+        "Custom Prefix:": "Préfixe personnalisé :",
+        "ASCII over TCP Output - Main Source": "Sortie ASCII via TCP - Source Principale",
+        "ASCII over TCP Output - Backup Source 1": "Sortie ASCII via TCP - Source de Secours 1",
+        "ASCII over TCP Output - Backup Source 2": "Sortie ASCII via TCP - Source de Secours 2",
+        "Send the \"Currently Playing\" metadata in ASCII format over TCP connection to an RDS encoder.": "Envoyer les métadonnées de la source au format ASCII via une connexion TCP vers un encodeur RDS.",
+        "Done (Will be applied upon saving)": "Terminé (Appliqué à l'enregistrement)",
+        "Type:": "Type :",
+        "URL:": "URL :",
+        "URI (RTSP, UDP, etc.):": "URI (RTSP, UDP...) :",
+        "IP Address:": "Adresse IP :",
+        "RTSP Port:": "Port RTSP :",
+        "Source:": "Source :",
+        "Frequency:": "Fréquence :",
+        "Polarization:": "Polarisation :",
+        "Vertical": "Verticale",
+        "Horizontal": "Horizontale",
+        "Modulation System:": "Modulation :",
+        "Symbol Rate:": "Débit symbole (SR) :",
+        "Service ID (SID):": "ID du Service (SID) :",
+        "Scan Services": "Scanner",
+        "...or Audio PID:": "...ou PID Audio :",
+        "Select Service:": "Sélectionner :",
+        "-- Select a service --": "-- Sélectionner --",
+        "Device:": "Périphérique :",
+        "Local File Path:": "Chemin du fichier :",
+        "Mode:": "Mode :",
+        "Single File (Loop)": "Fichier Unique (Boucle)",
+        "File:": "Fichier :",
+        "-- Select an uploaded file --": "-- Sélectionner --",
+        "Shuffle Playlist:": "Lecture aléatoire :",
+        "Schedule:": "Planification :",
+        "Memorize playback position:": "Mémoriser la position :",
+        "Input Gain (dB):": "Gain d'entrée (dB) :",
+        "Max Latency (ms):": "Latence maximale (ms) :",
+        "Waveform:": "Forme :",
+        "Sine": "Sinusoïdale",
+        "Square": "Carrée",
+        "Frequency (Hz):": "Fréquence (Hz) :",
+        "Enable \"Currently Playing\" Metadata Export:": "Activer l'export des métadonnées :",
+        "Export Method:": "Méthode d'export :",
+        "Local Text File": "Fichier texte",
+        "Raw ASCII over TCP": "ASCII brut via TCP",
+        "Export Path:": "Chemin d'export :",
+        "Configure ASCII over TCP Output": "Configurer la sortie TCP",
+        "Export only when played:": "Exporter uniquement si la source est lue :",
+        "Normalize letters with accents:": "Normaliser les accents :",
+        "Convert all letters to uppercase:": "Formater les lettres en majuscules :",
+        "Limit to 64 characters for Radiotext (RDS):": "Limiter à 64 caractères max. (RDS) :",
+        "Radiotext+ tags for Stereo Tool (Artist/Title):": "Intégrer les balises Radiotexte+ (Stereo Tool) :",
+        "Format used by source metadata:": "Format utilisé dans les métadonnées :",
+        "Artist - Title": "Artiste - Titre",
+        "Title - Artist": "Titre - Artiste",
+        "Separator used between artist and title:": "Séparateur utilisé entre l'artiste et le titre :",
+        "Custom...": "Personnalisé...",
+        "Send email alerts when...": "Envoyer une alerte lorsque...",
+        "This source is silent:": "Cette source est silencieuse :",
+        "This source is unreachable:": "Cette source est inaccessible :",
+        "Audio Output / Loss & Recovery": "Sortie Audio / Perte & Rétablissement",
+        "Output Device:": "Périphérique de sortie :",
+        "Output Gain (dB):": "Gain de sortie (dB) :",
+        "Output Buffer (ms):": "Tampon de sortie (ms) :",
+        "Audio Loss Threshold (dB):": "Seuil de perte audio (dB) :",
+        "Audio Loss Timeout (sec.):": "Délai perte audio (sec) :",
+        "Connection Loss Timeout (sec.):": "Délai perte connexion (sec) :",
+        "Audio Recovery Threshold (dB):": "Seuil rétablissement audio (dB) :",
+        "Audio Recovery Timeout (sec.):": "Délai rétablissement audio (sec) :",
+        "Save changes and apply configuration": "Enregistrer et appliquer la configuration",
+        "FM Settings": "Paramètres FM",
+        "Output Processing": "Traitement sur la sortie FM",
+        "FM Tilt Correction (Experimental):": "Correction du Tilt FM :",
+        "Enable Test Tone:": "Activer la tonalité :",
+        "Note: This will replace all audio output.": "Note : La tonalité remplacera intégralement la sortie audio.",
+        "Gain (dB):": "Gain (dB) :",
+        "Output Audio Analysis (CPU load increased on the host machine when active)": "Analyse de la Sortie Audio (Augmente la charge du processeur)",
+        "START ANALYSIS": "DÉMARRER L'ANALYSE",
+        "STOP ANALYSIS": "ARRÊTER L'ANALYSE",
+        "FFT Spectrum": "Spectre FFT",
+        "RTA (Octave Bands)": "RTA (Bandes d'octave)",
+        "Analog VU Meter": "VU-mètres Analogiques",
+        "Timescale:": "Échelle :",
+        "Now playing: ...": "En cours de lecture : ...",
+        
+        "By default, the operator account only has rights to modify the sources, without being able to modify the alert emails rules. Access to all \"sensitive\" sections is also disabled.": "Par défaut, le compte opérateur n'a le droit que de modifier les sources, sans pouvoir modifier les règles d'alerte mail. L'accès à toutes les sections \"sensibles\" est également désactivé.",
+        "If needed, you can enable access to some of these sections by checking the corresponding boxes below.": "Si nécessaire, vous pouvez activer l'accès à certaines de ces sections en cochant les cases correspondantes ci-dessous.",
+        "When this function is enabled, audio playback will resume exactly where it last stopped.": "Lorsque cette fonction est activée, la lecture audio reprend exactement là où elle s'était arrêtée précédemment.",
+        "Value in milliseconds.\nThe lower the value, the closer the source playback will be to real-time (instantaneous) streaming.\n\nA value that is too low may cause regular audio dropouts, and the decoder will be more susceptible to brief network interruptions.\nUse with caution.\n\nDefault value: 6000 (6 seconds)": "Valeur en millisecondes.\nPlus la valeur est basse, plus la lecture de la source est proche du temps réel.\n\nUne valeur trop basse peut causer des coupures audio régulières et rendre le décodeur plus sensible aux instabilités réseau.\nÀ utiliser avec précaution.\n\nValeur par défaut : 6000 (6 secondes)",
+        "Specify the path where you want to export the metadata content in text format. You can enter it manually or select the path using your operating system's file explorer by clicking the button to the right of the field.\n\nDon't forget to include the '.txt' extension.\n\nBy default, the files are generated in the WestBroadcast Streamer installation folder.": "Spécifiez le chemin où vous souhaitez exporter les métadonnées au format texte. Vous pouvez l'entrer manuellement ou le sélectionner via l'explorateur en cliquant sur le bouton à droite du champ.\n\nN'oubliez pas d'inclure l'extension '.txt'.\n\nPar défaut, les fichiers sont générés dans le dossier d'installation du logiciel.",
+        "When this function is enabled, all accented letters will be converted to unaccented letters. For example, 'é' will become 'e' and 'ô' will become 'o'.\n\nThis function can be useful for compatibility with some softwares.": "Lorsque cette fonction est activée, toutes les lettres accentuées seront converties en lettres non accentuées. Par exemple, 'é' deviendra 'e' et 'ô' deviendra 'o'.\n\nCette fonction peut être utile pour la compatibilité avec certains logiciels.",
+        "When this function is enabled, it ensures that the export is always limited to 64 characters in a 'clean' manner.\n\nIf the text exceeds 64 characters, the tool truncates the content at the 61st character and appends '...' to the end.": "Lorsque cette fonction est activée, elle s'assure que l'export est toujours limité à 64 caractères de manière 'propre'.\n\nSi le texte dépasse 64 caractères, l'outil tronque le contenu au 61ème caractère et ajoute '...' à la fin.",
+        "Formats the text export to include 'Artist' and 'Title' Radiotext+ tags compatible with Stereo Tool.\n\nFor Stereo Tool to recognize these tags, you must use the '\\f' or '\\F' argument in the 'Radiotext' field of your RDS configuration, preceding the path to your text file.\n\nFor further details, please refer to the Stereo Tool documentation.": "Formate l'export texte pour inclure les balises Radiotext+ 'Artiste' et 'Titre' compatibles avec Stereo Tool.\n\nPour que Stereo Tool reconnaisse ces balises, vous devez utiliser l'argument '\\f' ou '\\F' dans le champ 'Radiotext' de votre configuration RDS, précédant le chemin vers votre fichier texte.\n\nPour plus de détails, veuillez consulter la documentation de Stereo Tool.",
+        "Increase this value if you hear crackling or micro-cuts in the output.\n\nYou can also modify it to synchronize your output with another one.\n\nDefault value: 1000": "Augmentez cette valeur si vous entendez des craquements ou des micro-coupures en sortie.\n\nVous pouvez également la modifier pour synchroniser votre sortie avec une autre.\n\nValeur par défaut : 1000",
+        "When the input level is below this value, the source is considered silent.\n\nA value that is too high (too close to 0) can result in incorrect silence detection.\n\nDefault value: -45.0\n(Recommended for most use cases)": "Lorsque le niveau d'entrée est inférieur à cette valeur, la source est considérée comme silencieuse.\n\nUne valeur trop élevée (trop proche de 0) peut entraîner des détections erronées.\n\nValeur par défaut : -45.0\n(Recommandée pour la majorité des usages)",
+        "Number of seconds before the decoder decides to switch to a backup source when silence is detected.\n\nDefault value: 10": "Nombre de secondes avant que le décodeur ne décide de basculer vers une source de secours lorsqu'une absence audio est détectée.\n\nValeur par défaut : 10",
+        "Number of seconds before the decoder decides to switch to a backup source when the connection to a stream is lost.\n\nA high value can be useful if your Internet connection is prone to recurrent instability.\n\nOnce the connection is re-established, the switch back to the original source will be determined based on the 'Audio Recovery Timeout' value.\n\nDefault value: 5": "Nombre de secondes avant que le décodeur ne décide de basculer sur une source de secours en cas de perte de connexion au flux.\n\nUne valeur élevée peut être utile en cas de connexion Internet instable.\n\nUne fois la connexion rétablie, le retour à la source d'origine sera déterminé selon la valeur 'Délai rétablissement audio'.\n\nValeur par défaut : 5",
+        "When the input level is above this value, the source is considered to be functional again.\n\nA value that is too low (too close to -60) can result in false recovery detections.\n\nDefault value: -35.0\n(Recommended for most use cases)": "Lorsque le niveau d'entrée est supérieur à cette valeur, la source est considérée comme à nouveau fonctionnelle.\n\nUne valeur trop basse (trop proche de -60) peut entraîner des détections de rétablissement erronées.\n\nValeur par défaut : -35.0\n(Recommandée pour la majorité des usages)",
+        "Number of seconds before the decoder decides to switch back to the source that was considered silent.\n\nDefault value: 5": "Nombre de secondes avant que le décodeur ne décide de rebasculer sur la source qui était considérée comme silencieuse.\n\nValeur par défaut : 5",
+
+        "Are you sure you want to restart the decoder?\n\nThis will interrupt all audio inputs and the output for a very short time.": "Êtes-vous sûr de vouloir redémarrer le décodeur ?\n\nCela interrompra toutes les entrées et sorties audio pendant un court instant.",
+        "Are you sure you want to RESTORE the decoder to factory settings?\n\nThis operation will DELETE your current configuration and cannot be undone!": "Êtes-vous sûr de vouloir RESTAURER le décodeur aux paramètres d'usine ?\n\nCette opération SUPPRIMERA votre configuration actuelle et est irréversible !",
+        "Are you sure you want to send a test email to the configured recipients?": "Êtes-vous sûr de vouloir envoyer un mail de test aux destinataires configurés ?",
+        "Are you sure you want to clear all logs?": "Êtes-vous sûr de vouloir effacer tous les journaux ?",
+        "No files selected.": "Aucun fichier sélectionné.",
+        "Are you sure you want to delete the selected file?": "Êtes-vous sûr de vouloir supprimer le fichier sélectionné ?",
+        "Please select at least one day.": "Veuillez sélectionner au moins un jour.",
+        "Time is required.": "L'heure est requise.",
+        "Action / Source Details cannot be empty.": "La cible / détails ne peut pas être vide.",
+        "IP, Freq, and SR are required for SAT>IP.": "IP, Freq et SR sont requis pour le SAT>IP.",
+        "Your playlist cannot be empty. Please add at least one song to it.": "Votre playlist ne peut pas être vide. Veuillez y ajouter au moins un élément.",
+        "Your schedule cannot be empty. Please add at least one event.": "Votre planification ne peut pas être vide. Veuillez y ajouter au moins un événement.",
+        "Name required": "Le nom est requis.",
+        "Playlist saved successfully.": "Playlist enregistrée avec succès.",
+        "Schedule saved successfully.": "Planification enregistrée avec succès.",
+        "No items selected for upload.": "Aucun élément sélectionné pour l'envoi.",
+        "Success! ": "Succès ! ",
+        "Error: ": "Erreur : ",
+        "No specific programs/services found in this multiplex stream.": "Aucun programme/service spécifique trouvé dans ce multiplex.",
+        "Please enter an IP Address first.": "Veuillez d'abord entrer une adresse IP.",
+        "Please enter a valid URL or URI first.": "Veuillez d'abord entrer une URL ou URI valide.",
+        "Scanning...": "Analyse en cours...",
+        "Network error during scan.": "Erreur réseau lors de l'analyse.",
+        "Error scanning stream: ": "Erreur lors de l'analyse du flux : ",
+        "Audio engine restarted.": "Moteur audio redémarré.",
+        "Audio engine started.": "Moteur audio démarré.",
+        "Playlists updated.": "Playlists mises à jour.",
+        "Scheduler updated.": "Planificateur mis à jour.",
+        "FM/Tone settings updated.": "Paramètres FM/Tonalité mis à jour.",
+        "SMTP settings updated.": "Paramètres SMTP mis à jour.",
+        "Logs cleared by user.": "Journaux effacés par l'utilisateur.",
+        "Automatic mode enabled.": "Mode automatique activé.",
+        "System restart requested.": "Redémarrage du système demandé.",
+        "Factory restore requested.": "Restauration d'usine demandée.",
+        "Configuration imported.": "Configuration importée."
+    };
+
+    const fr_regex = [
+        { rx: /Are you sure you want to delete the '(.+)' playlist\?/, rep: "Êtes-vous sûr de vouloir supprimer la playlist '$1' ?" },
+        { rx: /Are you sure you want to delete the '(.+)' schedule\?/, rep: "Êtes-vous sûr de vouloir supprimer la planification '$1' ?" },
+        { rx: /Are you sure you want to delete the (\d+) selected files\?/, rep: "Êtes-vous sûr de vouloir supprimer les $1 fichiers sélectionnés ?" },
+        { rx: /Are you sure you want to delete (.+)\?/, rep: "Êtes-vous sûr de vouloir supprimer $1 ?" },
+        { rx: /(\d+) files? added to the directory\./, rep: "$1 fichier(s) ajouté(s) au répertoire." },
+        { rx: /3 failed login attempts from IP (.+)/, rep: "3 tentatives de connexion échouées depuis l'IP $1" },
+        { rx: /Successful login from IP (.+) as Administrator\./, rep: "Connexion réussie depuis l'IP $1 (Administrateur)." },
+        { rx: /Successful login from IP (.+) as Operator\./, rep: "Connexion réussie depuis l'IP $1 (Opérateur)." },
+        { rx: /Failed login attempt from IP (.+)/, rep: "Tentative de connexion échouée depuis l'IP $1" },
+        { rx: /Manual mode enabled\. Forcing playback of MAIN SOURCE\./, rep: "Mode manuel activé. Lecture forcée de SOURCE PRINCIPALE." },
+        { rx: /Manual mode enabled\. Forcing playback of BACKUP SOURCE 1\./, rep: "Mode manuel activé. Lecture forcée de SOURCE DE SECOURS 1." },
+        { rx: /Manual mode enabled\. Forcing playback of BACKUP SOURCE 2\./, rep: "Mode manuel activé. Lecture forcée de SOURCE DE SECOURS 2." },
+        { rx: /Manual mode enabled\. Forcing playback of (.+)\./, rep: "Mode manuel activé. Lecture forcée de $1." },
+        { rx: /HTTP Port changed from (\d+) to (\d+)\. System restart requested\./, rep: "Port HTTP modifié de $1 vers $2. Redémarrage demandé." },
+        { rx: /Audio Analysis engine started\./, rep: "Moteur d'analyse audio démarré." },
+        { rx: /Audio Analysis engine stopped\./, rep: "Moteur d'analyse audio arrêté." },
+        { rx: /Backup audio file uploaded: (.+)/, rep: "Fichier de secours importé : $1" },
+        { rx: /Audio file deleted: (.+)/, rep: "Fichier audio supprimé : $1" },
+        { rx: /Silence detected on (.+)\. Switching to (.+)\./, rep: "Silence détecté sur $1. Bascule vers $2." },
+        { rx: /Silence detected on (.+)\./, rep: "Silence détecté sur $1." },
+        { rx: /(.+) unreachable\. Switching to (.+)\./, rep: "$1 inaccessible. Bascule vers $2." },
+        { rx: /(.+) unreachable\./, rep: "$1 inaccessible." },
+        { rx: /Audio recovery triggered\. Switching back to (.+)\./, rep: "Rétablissement audio détecté. Bascule sur $1." },
+        { rx: /Normal broadcasting has resumed on (.+)\./, rep: "$1 : Diffusion rétablie." },
+        { rx: /Email sent: (.+)/, rep: "Mail envoyé : $1" },
+        { rx: /SMTP Error: (.+)/, rep: "Erreur SMTP : $1" },
+        { rx: /The connection to the SMTP server has failed\. Please check your configuration and try again\.\n\nError details: ([\s\S]*)/, rep: "La connexion au serveur SMTP a échoué. Veuillez vérifier votre configuration et réessayer.\n\nDétails de l'erreur : $1" },
+        { rx: /Satellite Stream: (.+)/, rep: "Flux Satellite : $1" },
+        { rx: /Backup Directory File: (.+)/, rep: "Fichier du répertoire de secours : $1" },
+        { rx: /Playlist: (.+)/, rep: "Playlist : $1" },
+        { rx: /IP Stream: (.+)/, rep: "Flux IP : $1" },
+        { rx: /RTP \(Via MPEG-TS\): (.+)/, rep: "RTP (Via MPEG-TS) : $1" },
+        { rx: /RTP \(Via SDP File\): (.+)/, rep: "RTP (Fichier SDP) : $1" },
+        { rx: /Local File: (.+)/, rep: "Fichier Local : $1" },
+        { rx: /Audio Device: (.+)/, rep: "Périphérique Audio : $1" },
+        { rx: /Tone Generator: (.+)/, rep: "Générateur de tonalité : $1" },
+        { rx: /Audio Output Error: (.+)/, rep: "$1 : Erreur sortie audio" },
+        { rx: /TCP Metadata failed for (.+)/, rep: "$1 : Erreur métadonnées TCP" },
+        { rx: /Metadata file export error: (.+)/, rep: "Erreur d'export du fichier de métadonnées : $1" },
+        { rx: /Config POST Error: (.+)/, rep: "Erreur d'enregistrement de la configuration : $1" },
+        { rx: /PLANIFIÉ -> Input Device/, rep: "PLANIFIÉ -> Périphérique Audio" },
+        { rx: /PLANIFIÉ -> Tone Generator/, rep: "PLANIFIÉ -> Générateur de tonalité" },
+        { rx: /Hz \(Wave: (.+)\)/, rep: "Hz (Forme d'onde : $1)" }
+    ];
+
+    let translate = (text) => text;
+
+    if (APP_LANG === 'fr') {
+        translate = (text) => {
+            if(!text) return text;
+            let t = text.trim();
+            if(t === "") return text;
+            
+            // 1. Dictionnaire exact
+            if(fr_dict[t]) return text.replace(t, fr_dict[t]);
+            
+            // 2. Éléments dynamiques (Logs, Scheduler, Uptime)
+            for(let i=0; i<fr_regex.length; i++) {
+                if(fr_regex[i].rx.test(t)) {
+                    return text.replace(t, t.replace(fr_regex[i].rx, fr_regex[i].rep));
+                }
+            }
+            
+            // 3. Préfixes dynamiques
+            for(let key in fr_dict) {
+                if(t.startsWith(key) && key.length > 10) {
+                    return text.replace(key, fr_dict[key]);
+                }
+            }
+            return text;
+        };
+
+        // Interception sécurisée des popups Javascript
+        const originalAlert = window.alert;
+        window.alert = function(msg) { originalAlert(translate(msg)); };
+        const originalConfirm = window.confirm;
+        window.confirm = function(msg) { return originalConfirm(translate(msg)); };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const translateNode = (node) => {
+                if(node.nodeType === Node.TEXT_NODE) {
+                    let replaced = translate(node.nodeValue);
+                    if(replaced !== node.nodeValue) node.nodeValue = replaced;
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    // Parcours des textes
+                    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT, null, false);
+                    let childNode;
+                    while(childNode = walker.nextNode()) {
+                        let replaced = translate(childNode.nodeValue);
+                        if(replaced !== childNode.nodeValue) childNode.nodeValue = replaced;
+                    }
+                    
+                    // Traduction ciblée des attributs HTML spécifiques
+                    node.querySelectorAll('[data-tooltip]').forEach(el => {
+                        let replaced = translate(el.getAttribute('data-tooltip'));
+                        if(replaced !== el.getAttribute('data-tooltip')) el.setAttribute('data-tooltip', replaced);
+                    });
+                    node.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(el => {
+                        let replaced = translate(el.placeholder);
+                        if(replaced !== el.placeholder) el.placeholder = replaced;
+                    });
+                    node.querySelectorAll('input[type="button"], input[type="submit"], button').forEach(el => {
+                        if(el.innerText) {
+                            let replaced = translate(el.innerText);
+                            if(replaced !== el.innerText) el.innerText = replaced;
+                        }
+                    });
+                }
+            };
+
+            // Traduction initiale du document complet
+            translateNode(document.body);
+
+            // Observateur de mutations pour capturer instantanément et traduire les éléments dynamiques (Logs, listes...) sans modifier les fonctions JS
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => translateNode(node));
+                });
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        });
+    }
+</script>
 </body>
 </html>
