@@ -50,7 +50,7 @@ BACKUP_DIR = 'backup-audio-files'
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 DEFAULT_CONFIG = {
-    'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False},
+    'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False, 'language': 'en'},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
         {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''},
@@ -97,8 +97,8 @@ def load_config():
             cfg = json.load(f)
             if 'instance_name' not in cfg['server']: cfg['server']['instance_name'] = ''
             
-            # Operator account
-            for key in['op_user', 'op_pass', 'op_enabled', 'op_audio_access', 'op_fm_access', 'op_allow_restart', 'op_backup_access', 'hide_bg_on_login', 'peak_hold_enabled', 'peak_hold_time', 'monitor_cpu_ram']:
+            # Operator account & Language
+            for key in['op_user', 'op_pass', 'op_enabled', 'op_audio_access', 'op_fm_access', 'op_allow_restart', 'op_backup_access', 'hide_bg_on_login', 'peak_hold_enabled', 'peak_hold_time', 'monitor_cpu_ram', 'language']:
                 if key not in cfg['server']:
                     cfg['server'][key] = DEFAULT_CONFIG['server'][key]
                     
@@ -212,11 +212,25 @@ DIALOG_QUEUE = queue.Queue()
 DIALOG_RESULTS = {}
 
 def get_restarting_page(message, redirect_url="'/'"):
+    lang = CONFIG['server'].get('language', 'en')
+    title = "Redémarrage du système" if lang == 'fr' else "System Restart"
+    sub_txt = "Vous allez être automatiquement redirigé vers la page de connexion dans 5 secondes." if lang == 'fr' else "You will be automatically redirected to the login page in 5 seconds."
+    
+    if lang == 'fr':
+        if "The decoder is restarting" in message:
+            message = "Redémarrage du décodeur en cours... Veuillez patienter."
+        elif "HTTP Port modified" in message:
+            message = "Port HTTP modifié. Redémarrage du décodeur... Veuillez patienter."
+        elif "Resetting the decoder to factory settings" in message:
+            message = "Réinitialisation du décodeur aux paramètres d'usine... Veuillez patienter."
+        elif "The configuration file has been imported successfully" in message:
+            message = "Fichier de configuration importé avec succès. Redémarrage du décodeur..."
+
     return f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>System Restart - WestBroadcast Streamer</title>
+        <title>{title} - WestBroadcast Streamer</title>
         <style>
             body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 100px; background: #eef2f5; color: #333; height: 100vh; margin: 0; }}
             .card {{ background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: inline-block; min-width: 400px; }}
@@ -229,7 +243,7 @@ def get_restarting_page(message, redirect_url="'/'"):
         <div class="card">
             <div class="loader"></div>
             <h2>{message}</h2>
-            <p>You will be automatically redirected to the login page in 5 seconds.</p>
+            <p>{sub_txt}</p>
         </div>
         <script>
             setTimeout(function() {{ window.location.href = {redirect_url}; }}, 5000);
@@ -1552,12 +1566,28 @@ class BroadcastEngine:
                     if elapsed_trigger >= trigger_wait:
                         # Send the email only if the lock is open AND the anti-spam delay has expired
                         if not self.smtp_alert_sent_for_current_fault[i] and (now - self.smtp_last_sent[i]) > spam_wait_sec:
-                            msg_subject = f"Alert: {src_cfg['name'].upper()} is {status_key}"
-                            
+                            lang = CONFIG['server'].get('language', 'en')
                             mode = CONFIG['settings'].get('selection_mode', 'auto')
-                            mode_warn = "\n\nReminder: Automatic mode is disabled. The decoder won't switch to any backup source." if mode != 'auto' else ""
                             
-                            msg_body = f"{src_cfg['name'].upper()} is currently {status_key}!\nAnomaly detected on: {datetime.now().strftime('%d/%m/%Y at %H:%M:%S')}\n\nYou will be notified as soon as the source is recovered.\n\n{mode_warn}"
+                            if lang == 'fr':
+                                fr_names = {
+                                    "MAIN SOURCE": "SOURCE PRINCIPALE",
+                                    "BACKUP SOURCE 1": "SOURCE DE SECOURS 1",
+                                    "BACKUP SOURCE 2": "SOURCE DE SECOURS 2"
+                                }
+                                raw_name = src_cfg['name'].upper()
+                                source_name = fr_names.get(raw_name, raw_name)
+                                
+                                fr_status = {"SILENT": "ABSENCE AUDIO DÉTECTÉE", "UNREACHABLE": "PERTE DE CONNEXION DÉTECTÉE"}
+                                status_str = fr_status.get(status_key, status_key)
+                                msg_subject = f"Alerte : {status_str} sur {source_name}"
+                                mode_warn = "\n\nRappel : Le mode automatique est désactivé. Le décodeur ne basculera vers aucune source de secours." if mode != 'auto' else ""
+                                msg_body = f"{status_str} sur \"{source_name}\" !\nAnomalie détectée le : {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}\n\nUn nouveau mail vous sera envoyé lors du rétablissement de la source.\n\n{mode_warn}"
+                            else:
+                                msg_subject = f"Alert: {src_cfg['name'].upper()} is {status_key}"
+                                mode_warn = "\n\nReminder: Automatic mode is disabled. The decoder won't switch to any backup source." if mode != 'auto' else ""
+                                msg_body = f"{src_cfg['name'].upper()} is currently {status_key}!\nAnomaly detected on: {datetime.now().strftime('%d/%m/%Y at %H:%M:%S')}\n\nYou will be notified as soon as the source is recovered.\n\n{mode_warn}"
+                            
                             send_smtp_alert(msg_subject, msg_body)
                             
                             self.last_notified_status[i] = status_key
@@ -1576,12 +1606,26 @@ class BroadcastEngine:
                         recovery_wait = float(CONFIG['settings'].get('recovery_timeout_sec', 5.0))
 
                         if elapsed_recovery >= recovery_wait:
-                            msg_subject = f"Recovery Notification for {src_cfg['name'].upper()}"
-                            
+                            lang = CONFIG['server'].get('language', 'en')
                             mode = CONFIG['settings'].get('selection_mode', 'auto')
-                            mode_warn = "\n\nReminder: Automatic mode is disabled." if mode != 'auto' else ""
                             
-                            msg_body = f"{src_cfg['name'].upper()} is working properly again.\nNormal broadcasting has resumed.\n\nNotification sent on: {datetime.now().strftime('%d/%m/%Y at %H:%M:%S')}\n\n{mode_warn}"
+                            if lang == 'fr':
+                                fr_names = {
+                                    "MAIN SOURCE": "SOURCE PRINCIPALE",
+                                    "BACKUP SOURCE 1": "SOURCE DE SECOURS 1",
+                                    "BACKUP SOURCE 2": "SOURCE DE SECOURS 2"
+                                }
+                                raw_name = src_cfg['name'].upper()
+                                source_name = fr_names.get(raw_name, raw_name)
+                                
+                                msg_subject = f"Notification de rétablissement pour {source_name}"
+                                mode_warn = "\n\nRappel : Le mode automatique est désactivé." if mode != 'auto' else ""
+                                msg_body = f"Rétablissement de la source \"{source_name}\".\nLa diffusion habituelle vient de reprendre.\n\nNotification envoyée le : {datetime.now().strftime('%d/%m/%Y à %H:%M:%S')}\n\n{mode_warn}"
+                            else:
+                                msg_subject = f"Recovery Notification for {src_cfg['name'].upper()}"
+                                mode_warn = "\n\nReminder: Automatic mode is disabled." if mode != 'auto' else ""
+                                msg_body = f"{src_cfg['name'].upper()} is working properly again.\nNormal broadcasting has resumed.\n\nNotification sent on: {datetime.now().strftime('%d/%m/%Y at %H:%M:%S')}\n\n{mode_warn}"
+                            
                             send_smtp_alert(msg_subject, msg_body)
                             
                             self.last_notified_status[i] = status_key
@@ -1789,6 +1833,9 @@ class BroadcastEngine:
 engine = BroadcastEngine()
 
 # --- 6. FLASK ROUTES ---
+def get_perm_err():
+    return "Vous n'avez pas les permissions nécessaires pour effectuer cette opération." if CONFIG['server'].get('language', 'en') == 'fr' else "You do not have the necessary permissions to perform this operation."
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     # Handling connection errors caused by redirects
@@ -2058,7 +2105,7 @@ def api_audio_files():
 
 @app.route('/update_fm', methods=['POST'])
 def update_fm():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     try:
         CONFIG['fm']['tilt'] = (request.form.get('fm_tilt') == 'on')
         CONFIG['fm']['tone_enabled'] = (request.form.get('tone_enabled') == 'on')
@@ -2073,7 +2120,7 @@ def update_fm():
 
 @app.route('/update_smtp', methods=['POST'])
 def update_smtp():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     try:
         CONFIG['smtp']['enabled'] = (request.form.get('smtp_enabled') == 'on')
         CONFIG['smtp']['host'] = request.form.get('smtp_host')
@@ -2109,10 +2156,17 @@ def smtp_test():
     if not recipients:
         return jsonify({'status': 'error', 'message': 'No recipients configured.\nPlease verify your configuration and try again.'})
 
-    subject = "Test Email"
-    body = ("This is a test email from WestBroadcast Streamer.\n\n"
-            "This confirms that the SMTP configuration has been set up correctly.\n"
-            "You can now receive alerts in the event of a failure or silence on your audio sources.")
+    lang = CONFIG['server'].get('language', 'en')
+    if lang == 'fr':
+        subject = "Mail de test"
+        body = ("Ceci est un mail de test envoyé par WestBroadcast Streamer.\n\n"
+                "Cela confirme que la configuration SMTP a été réalisée correctement.\n"
+                "Vous pouvez désormais recevoir des alertes en cas de panne ou de silence sur vos sources audio.")
+    else:
+        subject = "Test Email"
+        body = ("This is a test email from WestBroadcast Streamer.\n\n"
+                "This confirms that the SMTP configuration has been set up correctly.\n"
+                "You can now receive alerts in the event of a failure or silence on your audio sources.")
 
     try:
         msg = MIMEText(body)
@@ -2186,7 +2240,7 @@ def api_logs():
 
 @app.route('/logs_export')
 def logs_export():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     def generate():
         yield "Timestamp | Type | Event\n"
         yield "--------------------------\n"
@@ -2242,7 +2296,7 @@ def logout(): session.pop('logged_in', None); return redirect(url_for('index'))
 
 @app.route('/set_mode', methods=['POST'])
 def set_mode():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     
     mode = request.form.get('mode', 'auto')
     CONFIG['settings']['selection_mode'] = mode
@@ -2298,7 +2352,7 @@ def set_mode():
 
 @app.route('/update_security', methods=['POST'])
 def update_security():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     try:
         old_port = CONFIG['server']['port']
         new_port = int(request.form.get('srv_port'))
@@ -2312,6 +2366,7 @@ def update_security():
         try: CONFIG['server']['peak_hold_time'] = int(request.form.get('peak_time', 3))
         except: CONFIG['server']['peak_hold_time'] = 3
         CONFIG['server']['monitor_cpu_ram'] = (request.form.get('monitor_cpu') == 'on')
+        CONFIG['server']['language'] = request.form.get('language', 'en')
         CONFIG['server']['op_enabled'] = (request.form.get('op_enabled') == 'on')
         CONFIG['server']['op_user'] = request.form.get('op_user', 'operator')
         CONFIG['server']['op_pass'] = request.form.get('op_pass', 'operator')
@@ -2338,9 +2393,9 @@ def update_security():
 
 @app.route('/sys_restart')
 def sys_restart():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     if session.get('role') != 'admin' and not CONFIG['server'].get('op_allow_restart'):
-        return "You do not have the necessary permissions to perform this operation.", 403
+        return get_perm_err(), 403
         
     add_internal_log("System restart requested.", "SYSTEM")
     def restart_thread():
@@ -2354,7 +2409,7 @@ def sys_restart():
 
 @app.route('/sys_restore')
 def sys_restore():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     global CONFIG
     CONFIG = DEFAULT_CONFIG.copy() 
     save_config(DEFAULT_CONFIG)    
@@ -2370,8 +2425,8 @@ def sys_restore():
 
 @app.route('/sys_export')
 def sys_export():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
-    save_config(CONFIG) 
+    if not session.get('logged_in'): return get_perm_err(), 403
+    save_config(CONFIG)
     return send_file(CONFIG_FILE, as_attachment=True, download_name='config.json')
 
 @app.route('/browse_file', methods=['GET'])
@@ -2388,7 +2443,7 @@ def browse_file():
 
 @app.route('/sys_import', methods=['POST'])
 def sys_import():
-    if not session.get('logged_in'): return "You do not have the necessary permissions to perform this operation.", 403
+    if not session.get('logged_in'): return get_perm_err(), 403
     if 'config_file' not in request.files: return "No file"
     file = request.files['config_file']
     if file.filename == '': return "No filename"
@@ -2509,15 +2564,106 @@ def socket_emit_loop():
 def start_gui():
     root = tk.Tk()
     root.title("WestBroadcast Streamer")
-    root.geometry("450x150")
     
+    try:
+        icon_path = os.path.join('static', 'favicon.ico')
+        if os.path.exists(icon_path):
+            root.iconbitmap(icon_path)
+    except:
+        pass
+        
+    # Verrouillage du redimensionnement de la fenetre
+    root.resizable(False, False)
+    win_w, win_h = 620, 240
+    
+    # Restauration de la derniere position ou centrage initial automatique
+    saved_x = CONFIG['server'].get('window_x')
+    saved_y = CONFIG['server'].get('window_y')
+    
+    if saved_x is not None and saved_y is not None:
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+        pos_x = max(0, min(int(saved_x), screen_w - win_w))
+        pos_y = max(0, min(int(saved_y), screen_h - win_h))
+        root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+    else:
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+        pos_x = (screen_w - win_w) // 2
+        pos_y = (screen_h - win_h) // 2
+        root.geometry(f"{win_w}x{win_h}+{pos_x}+{pos_y}")
+        
+    root.configure(bg="#eef2f5")
+    
+    # Memorisation continue des coordonnees lors du deplacement de la fenetre
+    def on_window_move(event):
+        if event.widget == root:
+            CONFIG['server']['window_x'] = root.winfo_x()
+            CONFIG['server']['window_y'] = root.winfo_y()
+            
+    root.bind("<Configure>", on_window_move)
+    
+    lang = CONFIG['server'].get('language', 'en')
     ip = get_local_ip()
     port = CONFIG['server']['port']
     
-    tk.Label(root, text=f"WEBSERVER IS RUNNING ON PORT {port}", fg="green", font=("Segoe UI", 12, "bold")).pack(pady=(15, 0))
-    tk.Label(root, text="KEEP THIS WINDOW OPEN FOR THE AUDIO OUTPUT!", fg="red", font=("Segoe UI", 10, "bold")).pack(pady=(0, 5))
-    tk.Label(root, text=f"IP: {ip}", fg="#333", font=("Segoe UI", 10)).pack(pady=2)
-    tk.Button(root, text="CLICK HERE TO OPEN THE WEBSERVER INTERFACE\n(Default credentials: admin/admin)", bg="#3c8dbc", fg="white", font=("Segoe UI", 9, "bold"), command=lambda: webbrowser.open(f"http://localhost:{port}")).pack(pady=10)
+    txt_running = f"SERVEUR WEB ACTIF SUR LE PORT {port}" if lang == 'fr' else f"WEBSERVER IS RUNNING ON PORT {port}"
+    txt_keep_open = "PENSEZ À GARDER CETTE FENÊTRE OUVERTE POUR LA SORTIE AUDIO !" if lang == 'fr' else "PLEASE KEEP THIS WINDOW OPEN FOR THE AUDIO OUTPUT!"
+    txt_btn = "CLIQUEZ ICI POUR ACCÉDER À L'INTERFACE WEB\n(Identifiants par défaut : admin/admin)" if lang == 'fr' else "CLICK HERE TO ACCESS THE WEBSERVER INTERFACE\n(Default credentials: admin/admin)"
+    txt_ip = f"IP : {ip}" if lang == 'fr' else f"IP: {ip}"
+    
+    tk.Label(root, text=txt_running, fg="#198754", bg="#eef2f5", font=("Segoe UI", 13, "bold")).pack(pady=(20, 5))
+    tk.Label(root, text=txt_keep_open, fg="#dc3545", bg="#eef2f5", font=("Segoe UI", 9)).pack(pady=(0, 10))
+    tk.Label(root, text=txt_ip, fg="#555", bg="#eef2f5", font=("Segoe UI", 11)).pack(pady=(0, 15))
+    
+    btn = tk.Button(root, text=txt_btn, bg="#3c8dbc", fg="white", activebackground="#337ab7", activeforeground="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", command=lambda: webbrowser.open(f"http://localhost:{port}"))
+    btn.pack(fill=tk.X, padx=40, pady=(0, 20), ipadx=10, ipady=6)
+    
+    ind_frame = tk.Frame(root, bg="#eef2f5")
+    ind_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    indicators = []
+    for i in range(3):
+        f = tk.Frame(ind_frame, bg="#eef2f5")
+        f.pack(side=tk.LEFT, expand=True)
+        c = tk.Canvas(f, width=14, height=14, bg="#eef2f5", highlightthickness=0)
+        c.pack(side=tk.LEFT, padx=(0, 5))
+        oval = c.create_oval(1, 1, 13, 13, fill="#adb5bd", outline="#adb5bd")
+        l = tk.Label(f, text="", bg="#eef2f5", fg="#444", font=("Segoe UI", 8, "bold"))
+        l.pack(side=tk.LEFT)
+        indicators.append((c, oval, l))
+
+    def update_gui_status():
+        for i in range(3):
+            try:
+                raw_name = CONFIG['sources'][i]['name'].upper()
+                if lang == 'fr':
+                    fr_names = {
+                        "MAIN SOURCE": "SOURCE PRINCIPALE",
+                        "BACKUP SOURCE 1": "SOURCE DE SECOURS 1",
+                        "BACKUP SOURCE 2": "SOURCE DE SECOURS 2"
+                    }
+                    raw_name = fr_names.get(raw_name, raw_name)
+                    
+                if len(raw_name) > 23: raw_name = raw_name[:21] + "..."
+                indicators[i][2].config(text=raw_name)
+                
+                status_str, color = engine.get_source_status(i)
+                
+                # Noir pour les sources non configurees, couleurs vives pour les autres statuts
+                if status_str in ["NOT CONFIGURED", "NO CONFIG"]:
+                    display_color = "#000000"
+                elif color == "#006400": display_color = "#28a745"
+                elif color == "#8B0000" or color == "#b00": display_color = "#dc3545"
+                elif color == "#e67e22": display_color = "#fd7e14"
+                elif color == "#666" or color == "#999": display_color = "#adb5bd"
+                else: display_color = color
+                
+                indicators[i][0].itemconfig(indicators[i][1], fill=display_color, outline=display_color)
+            except: pass
+        root.after(1000, update_gui_status)
+        
+    update_gui_status()
     
     def check_dialog_queue():
         try:
@@ -2545,6 +2691,23 @@ def start_gui():
         root.after(200, check_dialog_queue)
         
     check_dialog_queue()
+    
+    from tkinter import messagebox
+    def on_closing():
+        if lang == 'fr':
+            title = "Demande de confirmation"
+            msg = "Êtes-vous sûr de vouloir arrêter WestBroadcast Streamer ?\n\nATTENTION : La fermeture de cette fenêtre occasionnera l'arrêt de la sortie audio."
+        else:
+            title = "Confirmation Request"
+            msg = "Are you sure you want to stop WestBroadcast Streamer?\n\nWARNING: Closing this window will cause the audio output to stop."
+                
+        if messagebox.askyesno(title, msg):
+            CONFIG['server']['window_x'] = root.winfo_x()
+            CONFIG['server']['window_y'] = root.winfo_y()
+            save_config(CONFIG)
+            root.destroy()
+            
+    root.protocol("WM_DELETE_WINDOW", on_closing)
     root.mainloop()
 
 if __name__ == '__main__':
