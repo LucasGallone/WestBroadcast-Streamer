@@ -97,6 +97,15 @@ If not, feel free to open an "issue" with as much detail as possible.
 This project is licensed under the GNU General Public License (GPL) v3.0.
 <br>
 Please refer to the `LICENSE` file for more details.
+## Available languages
+WestBroadcast Streamer is available in English and French.
+<br>
+There are currently no plans to add other languages, in order to ensure the quality of the translation.
+<br>
+<br>
+If you would like to contribute a translation for a language **you are a native speaker of**, please feel free to do so.
+<br>
+Any contribution is appreciated and welcome.
 - - -
 ### FFmpeg and FFprobe
 This project uses the FFmpeg and FFprobe libraries and executables for processing and analyzing audio streams.
