@@ -740,12 +740,19 @@
                 <button onclick="document.getElementById('sys-modal').style.display='flex'; document.getElementById('menu-dropdown').style.display='none'">Restart / Restore</button>
                 {% endif %}
                 <a href="/logout">Logout</a>
-                <div style="border-top: 1px solid #eee; padding: 6px 15px; text-align: right; font-size: 0.75rem; color: #888; user-select: none;">Version 1.8</div>
+                <div style="border-top: 1px solid #eee; padding: 6px 15px; text-align: right; font-size: 0.75rem; color: #888; user-select: none;">Version 1.9</div>
             </div>
         </div>
         {% endif %}
     </div>
 </div>
+
+{% if cfg.audio.output_device and 'WDM-KS' in cfg.audio.output_device|string %}
+<div style="background-color: #fff3cd; color: #856404; padding: 10px 20px; font-size: 0.9rem; border-bottom: 1px solid #ffeeba; font-weight: 500; text-align: center;">
+    The "Windows WDM-KS" audio engine is currently being used for the output. Using this engine may cause instability, as well as random bugs or freezes upon startup.<br>
+    Whenever possible, it is recommended to select a different audio engine.
+</div>
+{% endif %}
 
 <!-- NOW PLAYING BAR -->
 <div class="now-playing-bar" id="now-playing-text">Now playing: ...</div>
@@ -1098,6 +1105,39 @@
                         </div>
                     </div>
 
+                    <div style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;">
+                        <div class="form-row">
+                            <label style="flex: 0 0 280px;">Enable Metadata-Based Source Switching:</label>
+                            <input type="checkbox" name="meta_switch_enabled{{i}}" onclick="toggleMetaSwitch('{{i}}', this)" {{ 'checked' if cfg.sources[i].meta_switch_enabled else '' }}>
+                        </div>
+                        <div id="meta-switch-options-{{i}}" {% if not cfg.sources[i].meta_switch_enabled %}style="margin-top:10px; background:#f9f9f9; padding:10px; border-radius:4px; border:1px solid #eee; display:none;"{% else %}style="margin-top:10px; background:#f9f9f9; padding:10px; border-radius:4px; border:1px solid #eee;"{% endif %}>
+                            <div class="form-row">
+                                <label style="flex:0 0 200px;">Switch if metadata matches:</label>
+                                <input type="text" name="meta_switch_trigger{{i}}" value="{{ cfg.sources[i].meta_switch_trigger }}" placeholder="e.g. SWITCH-START" style="flex:1;">
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 200px;">Delay before switch (sec):</label>
+                                <input type="number" name="meta_switch_delay{{i}}" value="{{ cfg.sources[i].meta_switch_delay | default(0) }}" min="0" style="flex:1;">
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 200px;">Switch to:</label>
+                                <select name="meta_switch_target{{i}}" style="flex:1;">
+                                    {% if i != 0 %}<option value="0" {% if cfg.sources[i].meta_switch_target == 0 %}selected{% endif %}>Main Source</option>{% endif %}
+                                    {% if i != 1 %}<option value="1" {% if cfg.sources[i].meta_switch_target == 1 %}selected{% endif %}>Backup Source 1</option>{% endif %}
+                                    {% if i != 2 %}<option value="2" {% if cfg.sources[i].meta_switch_target == 2 %}selected{% endif %}>Backup Source 2</option>{% endif %}
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label style="flex:0 0 200px;">Return if metadata matches:</label>
+                                <input type="text" name="meta_switch_return{{i}}" value="{{ cfg.sources[i].meta_switch_return }}" placeholder="e.g. SWITCH-END" style="flex:1;">
+                            </div>
+                            <div class="form-row" style="margin-bottom:0;">
+                                <label style="flex:0 0 200px;">Delay before return (sec):</label>
+                                <input type="number" name="meta_switch_return_delay{{i}}" value="{{ cfg.sources[i].meta_switch_return_delay | default(0) }}" min="0" style="flex:1;">
+                            </div>
+                        </div>
+                    </div>
+
                     {% if session.role == 'admin' %}
                     <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
                         <div style="font-weight:bold; font-size:0.9rem; margin-bottom:5px;">Send email alerts when...</div>
@@ -1335,7 +1375,11 @@
         document.getElementById('custom-sep-' + idx).style.display = (val === 'custom') ? 'block' : 'none';
     }
 
-   function openLogs() {
+    function toggleMetaSwitch(idx, chk) {
+        document.getElementById('meta-switch-options-' + idx).style.display = chk.checked ? 'block' : 'none';
+    }
+
+    function openLogs() {
         document.getElementById('logs-modal').style.display='flex';
         currentLogPage = 1;
         loadLogs();
@@ -2111,6 +2155,9 @@
                 toggleType(i); 
                 if(document.getElementById('sel-backup-mode-' + i)) toggleBackupMode(i);
                 if(document.getElementById('sel-meta-method-' + i)) toggleMetaMethod(i);
+                
+                let metaSwitchChk = document.querySelector('input[name="meta_switch_enabled' + i + '"]');
+                if(metaSwitchChk) toggleMetaSwitch(i, metaSwitchChk);
             }
         }
         
@@ -2936,6 +2983,8 @@
         "ASCII over TCP Output - Backup Source 1": "Sortie ASCII via TCP - Source de Secours 1",
         "ASCII over TCP Output - Backup Source 2": "Sortie ASCII via TCP - Source de Secours 2",
         "Send the \"Currently Playing\" metadata in ASCII format over TCP connection to an RDS encoder.": "Envoyer les métadonnées de la source au format ASCII via une connexion TCP vers un encodeur RDS.",
+        "The \"Windows WDM-KS\" audio engine is currently being used for the output. Using this engine may cause instability, as well as random bugs or freezes upon startup.": "Le moteur audio \"Windows WDM-KS\" est actuellement utilisé pour la sortie. L'utilisation de ce moteur peut occasionner des instabilités et des bugs/freezes aléatoires au démarrage.",
+        "Whenever possible, it is recommended to select a different audio engine.": "Il est conseillé, dans la mesure du possible, de sélectionner un autre moteur audio.",
         "Done (Will be applied upon saving)": "Terminé (Appliqué à l'enregistrement)",
         "Type:": "Type :",
         "URL:": "URL :",
@@ -2985,6 +3034,14 @@
         "Title - Artist": "Titre - Artiste",
         "Separator used between artist and title:": "Séparateur utilisé entre l'artiste et le titre :",
         "Custom...": "Personnalisé...",
+        "Enable Metadata-Based Source Switching:": "Activer le basculement via métadonnées :",
+        "Switch if metadata matches:": "Basculer si la métadonnée correspond à :",
+        "Delay before switch (sec):": "Délai avant bascule (sec) :",
+        "Switch to:": "Basculer vers :",
+        "Return if metadata matches:": "Rebasculer si la métadonnée correspond à :",
+        "Delay before return (sec):": "Délai avant retour (sec) :",
+        "e.g. SWITCH-START": "Exemple : SWITCH-START",
+        "e.g. SWITCH-END": "Exemple : SWITCH-END",
         "Send email alerts when...": "Envoyer une alerte lorsque...",
         "This source is silent:": "Cette source est silencieuse :",
         "This source is unreachable:": "Cette source est inaccessible :",
@@ -3106,6 +3163,8 @@
         { rx: /TCP Metadata failed for (.+)/, rep: "$1 : Erreur métadonnées TCP" },
         { rx: /Metadata file export error: (.+)/, rep: "Erreur d'export du fichier de métadonnées : $1" },
         { rx: /Config POST Error: (.+)/, rep: "Erreur d'enregistrement de la configuration : $1" },
+        { rx: /Metadata trigger '(.+)' detected on (.+)\. Switching to (.+)\./, rep: "Déclencheur métadonnées '$1' détecté sur $2. Basculement vers $3." },
+        { rx: /Metadata return trigger '(.+)' detected on (.+)\. Switching back\./, rep: "Déclencheur de retour '$1' détecté sur $2. Retour à la source d'origine." },
         { rx: /PLANIFIÉ -> Input Device/, rep: "PLANIFIÉ -> Périphérique Audio" },
         { rx: /PLANIFIÉ -> Tone Generator/, rep: "PLANIFIÉ -> Générateur de tonalité" },
         { rx: /Hz \(Wave: (.+)\)/, rep: "Hz (Forme d'onde : $1)" }

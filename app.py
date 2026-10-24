@@ -164,6 +164,13 @@ def load_config():
                 if 'meta_max_64' not in src: src['meta_max_64'] = False
                 if 'alert_silent' not in src: src['alert_silent'] = False
                 if 'alert_unreachable' not in src: src['alert_unreachable'] = False
+                
+                if 'meta_switch_enabled' not in src: src['meta_switch_enabled'] = False
+                if 'meta_switch_trigger' not in src: src['meta_switch_trigger'] = ''
+                if 'meta_switch_target' not in src: src['meta_switch_target'] = 0
+                if 'meta_switch_return' not in src: src['meta_switch_return'] = ''
+                if 'meta_switch_delay' not in src: src['meta_switch_delay'] = 0
+                if 'meta_switch_return_delay' not in src: src['meta_switch_return_delay'] = 0
 
             for k, v in DEFAULT_CONFIG['settings'].items():
                 if k not in cfg['settings']: cfg['settings'][k] = v
@@ -1035,6 +1042,9 @@ class BroadcastEngine:
         self.recovery_timers = {0: 0, 1: 0, 2: 0}
         self.is_recovering = {0: False, 1: False, 2: False}
         
+        # Flags for Metadata-Based Switching override
+        self.metadata_override_active = False
+        
         # SMTP alerts tracking
         self.last_notified_status = [None, None, None]
         # SMTP timers
@@ -1321,6 +1331,52 @@ class BroadcastEngine:
                 
                 if i == self.current_source_idx:
                     self.current_metadata_title = title
+
+                # --- METADATA SWITCHING LOGIC ---
+                if src.get('meta_switch_enabled') and CONFIG['settings'].get('selection_mode', 'auto') == 'auto':
+                    trigger_meta = src.get('meta_switch_trigger', '').strip()
+                    return_meta = src.get('meta_switch_return', '').strip()
+                    target_idx = int(src.get('meta_switch_target', 0))
+                    delay_out = int(src.get('meta_switch_delay', 0))
+                    delay_return = int(src.get('meta_switch_return_delay', 0))
+
+                    if trigger_meta and trigger_meta.lower() == title.strip().lower():
+                        if self.current_source_idx == i and target_idx != i and getattr(self, 'meta_trigger_active', -1) != i:
+                            self.meta_trigger_active = i
+                            
+                            def do_meta_switch(orig, tgt):
+                                if CONFIG['settings'].get('selection_mode', 'auto') == 'auto' and self.current_source_idx == orig:
+                                    add_internal_log(f"Metadata trigger '{trigger_meta}' detected on {CONFIG['sources'][orig]['name'].upper()}. Switching to {CONFIG['sources'][tgt]['name'].upper()}.", "INFO")
+                                    self.current_source_idx = tgt
+                                    self.current_metadata_title = ""
+                                    self.is_silence = False
+                                    self.meta_switched_from = orig
+                                    self.metadata_override_active = True
+                                self.meta_trigger_active = -1
+
+                            if delay_out > 0:
+                                threading.Timer(delay_out, do_meta_switch, args=[i, target_idx]).start()
+                            else:
+                                do_meta_switch(i, target_idx)
+
+                    if return_meta and return_meta.lower() == title.strip().lower():
+                        if getattr(self, 'meta_switched_from', -1) == i and self.current_source_idx == target_idx and getattr(self, 'meta_return_active', -1) != i:
+                            self.meta_return_active = i
+                            
+                            def do_meta_return(orig, tgt):
+                                if CONFIG['settings'].get('selection_mode', 'auto') == 'auto' and self.current_source_idx == tgt:
+                                    add_internal_log(f"Metadata return trigger '{return_meta}' detected on {CONFIG['sources'][orig]['name'].upper()}. Switching back.", "INFO")
+                                    self.current_source_idx = orig
+                                    self.current_metadata_title = ""
+                                    self.is_silence = False
+                                    self.meta_switched_from = -1
+                                    self.metadata_override_active = False
+                                self.meta_return_active = -1
+
+                            if delay_return > 0:
+                                threading.Timer(delay_return, do_meta_return, args=[i, target_idx]).start()
+                            else:
+                                do_meta_return(i, target_idx)
 
                 if src['meta_enabled'] and title:
                     # Check "Export only when played" option
@@ -1638,6 +1694,10 @@ class BroadcastEngine:
             mode = CONFIG['settings'].get('selection_mode', 'auto')
             
             if mode == 'auto':
+                if self.metadata_override_active:
+                    time.sleep(0.005)
+                    continue
+
                 active_ch = self.channels[self.current_source_idx]
                 current_max_db = max(self.vu_data['sources'][self.current_source_idx]['l'], 
                                      self.vu_data['sources'][self.current_source_idx]['r'])
@@ -1959,6 +2019,13 @@ def index():
                 src['meta_rtplus_separator'] = sep_val
                 
                 src['meta_max_64'] = (request.form.get(f'meta_max_64{i}') == 'on')
+                
+                src['meta_switch_enabled'] = (request.form.get(f'meta_switch_enabled{i}') == 'on')
+                src['meta_switch_trigger'] = request.form.get(f'meta_switch_trigger{i}', '').strip()
+                src['meta_switch_target'] = int(request.form.get(f'meta_switch_target{i}', 0))
+                src['meta_switch_return'] = request.form.get(f'meta_switch_return{i}', '').strip()
+                src['meta_switch_delay'] = int(float(request.form.get(f'meta_switch_delay{i}', 0)))
+                src['meta_switch_return_delay'] = int(float(request.form.get(f'meta_switch_return_delay{i}', 0)))
                 
                 # TCP ASCII parameters
                 src['meta_export_method'] = request.form.get(f'meta_export_method{i}', 'file')
