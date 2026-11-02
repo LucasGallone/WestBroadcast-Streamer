@@ -50,9 +50,9 @@ if errorlevel 1 (
     exit /b
 )
 
-python -c "import flask, flask_socketio, numpy, sounddevice" >nul 2>&1
+python -c "import flask, flask_socketio, numpy, sounddevice, serial" >nul 2>&1
 if errorlevel 1 (
-    python -m pip install --quiet flask "flask-socketio>=5.3.6,<6.0.0" numpy sounddevice psutil
+    python -m pip install --quiet flask "flask-socketio>=5.3.6,<6.0.0" numpy sounddevice psutil pyserial
 )
 
 if "%IS_FR%"=="1" (

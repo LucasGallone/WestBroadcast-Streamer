@@ -872,7 +872,63 @@
                 <button type="button" class="modal-btn btn-blue" onclick="document.getElementById('tcp-modal-{{i}}').style.display='none'" style="margin-top: 20px;">Done (Will be applied upon saving)</button>
             </div>
         </div>
+
+        <div id="uecp-modal-{{i}}" class="modal">
+            <div class="modal-box" style="width: 500px;">
+                <h2>UECP Output - {{ cfg.sources[i].name }}</h2>
+                <p style="font-size: 0.85rem; color: #555; text-align: left; margin-bottom: 15px;">UECP frames found in the audio are sent unmodified (0xFE ... 0xFF) to an RDS encoder: as a client of its TCP server, as UDP datagrams (one frame per datagram), or over a serial port. Anything the encoder sends back is ignored.</p>
+
+                <div class="form-row">
+                    <label style="flex: 0 0 150px;">Send via:</label>
+                    <select name="uecp_output{{i}}" id="sel-uecp-output-{{i}}" onchange="toggleUecpOutput('{{i}}')" style="margin: 0;">
+                        <option value="tcp" {% if cfg.sources[i].uecp_output not in ['udp', 'serial'] %}selected{% endif %}>TCP (connect to server)</option>
+                        <option value="udp" {% if cfg.sources[i].uecp_output == 'udp' %}selected{% endif %}>UDP</option>
+                        <option value="serial" {% if cfg.sources[i].uecp_output == 'serial' %}selected{% endif %}>Serial port</option>
+                    </select>
+                </div>
+
+                <div id="row-uecp-net-{{i}}" {% if cfg.sources[i].uecp_output == 'serial' %}style="display:none;"{% endif %}>
+                    <div class="form-row">
+                        <label style="flex: 0 0 150px;">Encoder IP / Host:</label>
+                        <input type="text" name="uecp_host{{i}}" value="{{ cfg.sources[i].uecp_host }}" style="margin: 0;">
+                    </div>
+                    <div class="form-row">
+                        <label style="flex: 0 0 150px;">Encoder Port:</label>
+                        <input type="number" min="1" max="65535" name="uecp_port{{i}}" value="{{ cfg.sources[i].uecp_port }}" style="margin: 0;">
+                    </div>
+                </div>
+
+                <div id="row-uecp-serial-{{i}}" {% if cfg.sources[i].uecp_output != 'serial' %}style="display:none;"{% endif %}>
+                    <div class="form-row">
+                        <label style="flex: 0 0 150px;">Serial Port:</label>
+                        <input type="text" name="uecp_serial_port{{i}}" list="uecp-serial-ports" value="{{ cfg.sources[i].uecp_serial_port }}" placeholder="e.g. COM3" style="margin: 0;">
+                    </div>
+                    <div class="form-row">
+                        <label style="flex: 0 0 150px;">Baud Rate:</label>
+                        <input type="number" min="300" name="uecp_serial_baud{{i}}" list="uecp-baud-rates" value="{{ cfg.sources[i].uecp_serial_baud }}" style="margin: 0;">
+                    </div>
+                    <p style="font-size: 0.8rem; color: #777; text-align: left; margin: 0;">8 data bits, no parity, 1 stop bit.{% if not serial_ports %} No serial ports detected on this machine.{% endif %}</p>
+                </div>
+
+                <div class="form-row" style="margin-top: 10px;">
+                    <label style="flex: 0 0 280px;">Delay UECP to match the audio:<span class="info-icon-blue" data-tooltip="When enabled, each UECP frame is held back until the audio it arrived with is actually played (source buffer + audio output latency), so RDS changes line up with what is heard.&#10;&#10;When disabled, UECP frames are sent as soon as they are received, ahead of the audio by the buffer latency.">i</span></label>
+                    <input type="checkbox" name="uecp_sync_audio{{i}}" {{ 'checked' if cfg.sources[i].uecp_sync_audio else '' }} style="flex: 0; width: auto !important; margin: 0;">
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-top: 20px;">
+                    <button type="button" class="modal-btn btn-blue" onclick="closeUecpModal('{{i}}', true)" style="flex: 2; margin-top: 0;">Done (Will be applied upon saving)</button>
+                    <button type="button" class="modal-btn btn-grey" onclick="closeUecpModal('{{i}}', false)" style="flex: 1; margin-top: 0;">Close</button>
+                </div>
+            </div>
+        </div>
         {% endfor %}
+
+        <datalist id="uecp-serial-ports">
+            {% for p in serial_ports %}<option value="{{ p }}">{% endfor %}
+        </datalist>
+        <datalist id="uecp-baud-rates">
+            <option value="9600"><option value="19200"><option value="38400"><option value="57600"><option value="115200"><option value="230400">
+        </datalist>
 
         <div class="settings-grid">
             {% for i in range(3) %}
@@ -1138,6 +1194,17 @@
                         </div>
                     </div>
 
+                    <div id="uecp-wrapper-{{i}}" style="margin-top:15px; border-top:1px solid #eee; padding-top:10px;{% if cfg.sources[i].type not in uecp_source_types %} display:none;{% endif %}">
+                        <div class="form-row">
+                            <label style="flex: 0 0 280px;">Forward UECP (RDS) carried in the audio:<span class="info-icon-blue" data-tooltip="Extracts the UECP frames carried in MP2 ancillary data or in AAC (ADTS or LATM) data stream elements, and sends them unmodified to an RDS encoder over TCP, UDP or a serial port.&#10;&#10;Can only be enabled once this source is playing MP2 or AAC audio.&#10;&#10;Only the source on air forwards (optionally delayed to match its audio). Frames with a bad CRC are dropped.">i</span></label>
+                            <input type="checkbox" name="uecp_enabled{{i}}" id="uecp-enabled-{{i}}" onclick="toggleUecp('{{i}}', this)" {{ 'checked' if cfg.sources[i].uecp_enabled else 'disabled' }}>
+                        </div>
+                        <div id="uecp-status-{{i}}" style="font-size: 0.8rem; color: #666; margin: -5px 0 8px 0;"></div>
+                        <div id="uecp-options-{{i}}" {% if not cfg.sources[i].uecp_enabled %}style="display:none;"{% endif %}>
+                            <button type="button" class="btn-sec" onclick="openUecpModal('{{i}}')" style="color: black; border-color: #ccc; width: 100%;">Configure UECP Output</button>
+                        </div>
+                    </div>
+
                     {% if session.role == 'admin' %}
                     <div style="margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
                         <div style="font-weight:bold; font-size:0.9rem; margin-bottom:5px;">Send email alerts when...</div>
@@ -1349,6 +1416,71 @@
             document.getElementById('row-max-latency-' + idx).style.display = 'none';
             document.getElementById('row-memorize-pos-' + idx).style.display = 'flex';
         }
+
+        // UECP passthrough needs the compressed audio, so only live stream / RTP / SAT>IP sources
+        let uecpWrapper = document.getElementById('uecp-wrapper-' + idx);
+        if (uecpWrapper) {
+            let uecpType = ['stream', 'rtp_mpegts', 'multiplex', 'rtp_sdp'].includes(val);
+            uecpWrapper.style.display = uecpType ? 'block' : 'none';
+            if (!uecpType) {
+                let chk = document.getElementById('uecp-enabled-' + idx);
+                chk.checked = false;
+                toggleUecp(idx, chk);
+            }
+        }
+    }
+
+    function toggleUecp(idx, chk) {
+        document.getElementById('uecp-options-' + idx).style.display = chk.checked ? 'block' : 'none';
+    }
+
+    // The UECP modal edits fields of the main form; remember them on open so Close can put them back
+    let uecpModalSnapshot = {};
+
+    function openUecpModal(idx) {
+        let modal = document.getElementById('uecp-modal-' + idx);
+        uecpModalSnapshot[idx] = Array.from(modal.querySelectorAll('input, select')).map(el =>
+            [el, el.type === 'checkbox' ? el.checked : el.value]);
+        modal.style.display = 'flex';
+    }
+
+    function closeUecpModal(idx, keep) {
+        if (!keep && uecpModalSnapshot[idx]) {
+            uecpModalSnapshot[idx].forEach(([el, val]) => {
+                if (el.type === 'checkbox') el.checked = val; else el.value = val;
+            });
+            toggleUecpOutput(idx);
+        }
+        delete uecpModalSnapshot[idx];
+        document.getElementById('uecp-modal-' + idx).style.display = 'none';
+    }
+
+    function toggleUecpOutput(idx) {
+        let val = document.getElementById('sel-uecp-output-' + idx).value;
+        document.getElementById('row-uecp-net-' + idx).style.display = (val === 'tcp' || val === 'udp') ? 'block' : 'none';
+        document.getElementById('row-uecp-serial-' + idx).style.display = (val === 'serial') ? 'block' : 'none';
+    }
+
+    function updateUecpStatus(idx, u) {
+        let chk = document.getElementById('uecp-enabled-' + idx);
+        let st = document.getElementById('uecp-status-' + idx);
+        if (!chk || !st || !u) return;
+
+        // Can only be switched on while the source is playing MP2 or AAC; can always be switched off
+        chk.disabled = !chk.checked && !(u.type_ok && u.supported === true);
+
+        let txt = '';
+        if (u.type_ok) {
+            if (u.supported === null) txt = 'Codec: waiting for the source to play...';
+            else if (!u.supported) txt = 'Codec: ' + u.codec + ' - UECP needs MP2 or AAC audio';
+            else if (!u.enabled) txt = 'Codec: ' + u.codec + ' - UECP forwarding available';
+            else {
+                txt = 'Codec: ' + u.codec + ' | UECP frames: ' + u.frames + ' (' + u.crc_errors + ' bad CRC dropped) | Sent: ' + u.sent;
+                if (u.output) txt += ' | ' + u.output;
+            }
+            if (u.enabled && u.error) txt += ' | ' + u.error;
+        }
+        st.innerText = txt;
     }
 
     function toggleTcpPrefix(idx) {
@@ -2281,6 +2413,8 @@
             if(data.codecs[i]) codecSpan.innerText = data.codecs[i];
             else codecSpan.innerText = "";
 
+            if (data.uecp && typeof updateUecpStatus === 'function') updateUecpStatus(i, data.uecp[i]);
+
             updateMeter('src-'+i, data.vu.sources[i].l, data.vu.sources[i].r, true);
         }
         updateMeter('out', data.vu.out_l, data.vu.out_r, true);
@@ -3042,6 +3176,26 @@
         "Delay before return (sec):": "Délai avant retour (sec) :",
         "e.g. SWITCH-START": "Exemple : SWITCH-START",
         "e.g. SWITCH-END": "Exemple : SWITCH-END",
+        "Forward UECP (RDS) carried in the audio:": "Transférer l'UECP (RDS) contenu dans l'audio :",
+        "Extracts the UECP frames carried in MP2 ancillary data or in AAC (ADTS or LATM) data stream elements, and sends them unmodified to an RDS encoder over TCP, UDP or a serial port.\n\nCan only be enabled once this source is playing MP2 or AAC audio.\n\nOnly the source on air forwards (optionally delayed to match its audio). Frames with a bad CRC are dropped.": "Extrait les trames UECP transportées dans les données auxiliaires MP2 ou dans les éléments de données (DSE) AAC (ADTS ou LATM), et les envoie sans modification vers un encodeur RDS via TCP, UDP ou un port série.\n\nNe peut être activé que lorsque cette source diffuse de l'audio MP2 ou AAC.\n\nSeule la source à l'antenne transmet (avec, en option, un retard pour suivre son audio). Les trames dont le CRC est invalide sont ignorées.",
+        "Configure UECP Output": "Configurer la sortie UECP",
+        "Codec: waiting for the source to play...": "Codec : en attente de la lecture de la source...",
+        "UECP Output - Main Source": "Sortie UECP - Source Principale",
+        "UECP Output - Backup Source 1": "Sortie UECP - Source de Secours 1",
+        "UECP Output - Backup Source 2": "Sortie UECP - Source de Secours 2",
+        "UECP frames found in the audio are sent unmodified (0xFE ... 0xFF) to an RDS encoder: as a client of its TCP server, as UDP datagrams (one frame per datagram), or over a serial port. Anything the encoder sends back is ignored.": "Les trames UECP trouvées dans l'audio sont envoyées sans modification (0xFE ... 0xFF) vers un encodeur RDS : en tant que client de son serveur TCP, en datagrammes UDP (une trame par datagramme), ou via un port série. Les données renvoyées par l'encodeur sont ignorées.",
+        "Send via:": "Envoyer via :",
+        "TCP (connect to server)": "TCP (connexion au serveur)",
+        "Serial port": "Port série",
+        "Encoder IP / Host:": "IP / Hôte de l'encodeur :",
+        "Encoder Port:": "Port de l'encodeur :",
+        "Serial Port:": "Port série :",
+        "Baud Rate:": "Débit (bauds) :",
+        "8 data bits, no parity, 1 stop bit.": "8 bits de données, sans parité, 1 bit de stop.",
+        "8 data bits, no parity, 1 stop bit. No serial ports detected on this machine.": "8 bits de données, sans parité, 1 bit de stop. Aucun port série détecté sur cette machine.",
+        "e.g. COM3": "Exemple : COM3",
+        "Delay UECP to match the audio:": "Synchroniser l'UECP avec l'audio :",
+        "When enabled, each UECP frame is held back until the audio it arrived with is actually played (source buffer + audio output latency), so RDS changes line up with what is heard.\n\nWhen disabled, UECP frames are sent as soon as they are received, ahead of the audio by the buffer latency.": "Lorsque cette fonction est activée, chaque trame UECP est retenue jusqu'à ce que l'audio avec lequel elle est arrivée soit réellement diffusé (tampon de la source + latence de sortie audio), afin que les changements RDS correspondent à ce qui est entendu.\n\nLorsqu'elle est désactivée, les trames UECP sont envoyées dès leur réception, en avance sur l'audio de la durée du tampon.",
         "Send email alerts when...": "Envoyer une alerte lorsque...",
         "This source is silent:": "Cette source est silencieuse :",
         "This source is unreachable:": "Cette source est inaccessible :",
@@ -3167,6 +3321,14 @@
         { rx: /Metadata return trigger '(.+)' detected on (.+)\. Switching back\./, rep: "Déclencheur de retour '$1' détecté sur $2. Retour à la source d'origine." },
         { rx: /PLANIFIÉ -> Input Device/, rep: "PLANIFIÉ -> Périphérique Audio" },
         { rx: /PLANIFIÉ -> Tone Generator/, rep: "PLANIFIÉ -> Générateur de tonalité" },
+        { rx: /^Codec: (.+) - UECP needs MP2 or AAC audio$/, rep: "Codec : $1 - l'UECP nécessite un audio MP2 ou AAC" },
+        { rx: /^Codec: (.+) - UECP forwarding available$/, rep: "Codec : $1 - transfert UECP disponible" },
+        { rx: /^Codec: (.+?) \| UECP frames: (\d+) \((\d+) bad CRC dropped\) \| Sent: (\d+)/, rep: "Codec : $1 | Trames UECP : $2 ($3 rejetées, CRC invalide) | Envoyées : $4" },
+        { rx: /UECP output ready: (.+)/, rep: "Sortie UECP prête : $1" },
+        { rx: /UECP output (.+) closed by the remote end, reconnecting/, rep: "Sortie UECP $1 fermée par l'encodeur, reconnexion en cours" },
+        { rx: /UECP output (.+) failed: (.+)/, rep: "Échec de la sortie UECP $1 : $2" },
+        { rx: /UECP output (.+) lost: (.+)/, rep: "Connexion de la sortie UECP $1 perdue : $2" },
+        { rx: /UECP: ffmpeg could not copy the audio of (.+), UECP disabled for this input\./, rep: "UECP : ffmpeg n'a pas pu copier l'audio de $1, UECP désactivé pour cette entrée." },
         { rx: /Hz \(Wave: (.+)\)/, rep: "Hz (Forme d'onde : $1)" }
     ];
 
