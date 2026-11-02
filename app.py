@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import json
+import collections
 import subprocess
 import threading
 import webbrowser
@@ -35,6 +36,8 @@ if getattr(sys, 'frozen', False):
 else:
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+import uecp
+
 # --- 1. CONFIGURATION & LOGGING ---
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
@@ -53,9 +56,9 @@ DEFAULT_CONFIG = {
     'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False, 'language': 'en'},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
-        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''},
-        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''},
-        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': ''}
+        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True},
+        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True},
+        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True}
     ],
     'settings': {
         'loss_threshold_db': -45.0,
@@ -171,6 +174,13 @@ def load_config():
                 if 'meta_switch_return' not in src: src['meta_switch_return'] = ''
                 if 'meta_switch_delay' not in src: src['meta_switch_delay'] = 0
                 if 'meta_switch_return_delay' not in src: src['meta_switch_return_delay'] = 0
+                if 'uecp_enabled' not in src: src['uecp_enabled'] = False
+                if 'uecp_output' not in src: src['uecp_output'] = 'tcp'
+                if 'uecp_host' not in src: src['uecp_host'] = '127.0.0.1'
+                if 'uecp_port' not in src: src['uecp_port'] = 8300
+                if 'uecp_serial_port' not in src: src['uecp_serial_port'] = ''
+                if 'uecp_serial_baud' not in src: src['uecp_serial_baud'] = 115200
+                if 'uecp_sync_audio' not in src: src['uecp_sync_audio'] = True
 
             for k, v in DEFAULT_CONFIG['settings'].items():
                 if k not in cfg['settings']: cfg['settings'][k] = v
@@ -406,10 +416,12 @@ def get_scheduled_target(schedule_name):
     return best_target
 
 # --- 4. AUDIO CLASSES ---
+UECP_CODEC_CACHE = {} # (ffmpeg input, map args) -> codec last seen on it, decides whether to add the UECP tap
+
 class SourceChannel:
     def __init__(self, index):
         self.index = index
-        self.queue = queue.Queue(maxsize=10000) 
+        self.queue = uecp.FrameCountingQueue(maxsize=10000)
         self.running = False
         self.play_start_time = 0
         self.process = None
@@ -426,6 +438,38 @@ class SourceChannel:
         self.stream_title = ""     # Added for single-connection metadata extraction
         self.meta_delay_queue = [] # Delays titles to perfectly match actual audio output
 
+        # UECP (RDS) passthrough
+        self.detected_codec = None          # input codec of the played audio, from ffmpeg's "Stream mapping"
+        self.uecp_tap = None                # uecp.UecpTap attached to the current ffmpeg process
+        self.uecp_pending = uecp.UecpPending()
+        self.uecp_frames = 0
+        self.uecp_crc_errors = 0
+        self.uecp_error = ""
+        self.uecp_failed_inputs = set()     # inputs where ffmpeg rejected the copy output
+
+    def _on_uecp_frame(self, wire):
+        # Called from the tap's reader thread
+        if not uecp.crc_ok(wire):
+            self.uecp_crc_errors += 1
+            return
+        self.uecp_frames += 1
+        self.uecp_pending.add(self.queue.frames_in, wire)
+
+    def _uecp_wanted_codec(self, codec):
+        """Codec to tap for this source with the given input codec, or None (sets uecp_error)."""
+        src = CONFIG['sources'][self.index]
+        if not src.get('uecp_enabled') or src['type'] not in uecp.SOURCE_TYPES or not codec:
+            return None
+        if codec not in uecp.SUPPORTED_CODECS:
+            self.uecp_error = f"Codec is {uecp.codec_label(codec)} (MP2 or AAC required)"
+            return None
+        if codec != 'mp2':
+            _, err = uecp.aac_library()
+            if err:
+                self.uecp_error = err
+                return None
+        return codec
+
     def start(self):
         if self.running: return
         self.running = True
@@ -436,7 +480,8 @@ class SourceChannel:
         max_lat_ms = src.get('max_latency_ms', 6000)
         # Allocate enough physical queue size to hold twice the max latency (Safety margin)
         q_size = max(200, int((max_lat_ms / 1000.0) * 2 * (SAMPLE_RATE / BLOCK_SIZE)))
-        self.queue = queue.Queue(maxsize=q_size)
+        self.queue = uecp.FrameCountingQueue(maxsize=q_size)
+        self.uecp_pending.clear()
         
         # PROBE LOOP
         if (src['type'] == 'stream' or src['type'] == 'rtp') and (src['url'] or src['rtp_uri']):
@@ -457,6 +502,8 @@ class SourceChannel:
         if self.thread:
             self.thread.join(timeout=0.5)
         with self.queue.mutex: self.queue.queue.clear()
+        self.uecp_pending.clear()
+        self.detected_codec = None
         self.status_text = "STOPPED"
         self.status_color = "#999"
         self.codec_info = ""
@@ -650,6 +697,12 @@ class SourceChannel:
                         if not line: break
                         line_str = line.decode('utf-8', errors='ignore')
                         line_lower = line_str.lower()
+                        # "Stream #0:0 -> #0:0 (mp2 (native) -> pcm_s16le (native))": codec of the played audio
+                        if ' -> #0:0 (' in line_str:
+                            m_codec = re.search(r"Stream #\d+:\d+\S* -> #0:0 \((\w+)", line_str)
+                            if m_codec and proc is channel.process:
+                                channel.detected_codec = m_codec.group(1).lower()
+                            continue
                         if "streamtitle" in line_lower or "title" in line_lower:
                             m1 = re.search(r"StreamTitle\s*=\s*['\"]?(.*?)['\"]?(?:;|$)", line_str, re.IGNORECASE)
                             m2 = re.search(r"StreamTitle\s*:\s*(.*)", line_str, re.IGNORECASE)
@@ -842,13 +895,14 @@ class SourceChannel:
             elif src['type'] in ['rtp_mpegts', 'multiplex']:
                 if src['rtp_uri']:
                     valid = True
-                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '1000000', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
+                    # 'info' (not 'error') so the "Stream mapping" line reports the codec for UECP
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'info', '-nostats', '-fflags', 'nobuffer', '-flags', 'low_delay', '-analyzeduration', '1000000', '-probesize', '1000000', '-timeout', rw_timeout, '-i', src['rtp_uri']] + filter_arg
                 else:
                     self.status_text = "NO CONFIG"
             elif src['type'] == 'rtp_sdp':
                 if src['path'] and os.path.exists(src['path']):
                     valid = True
-                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-protocol_whitelist', 'file,udp,rtp', '-i', src['path']] + filter_arg
+                    cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'info', '-nostats', '-protocol_whitelist', 'file,udp,rtp', '-i', src['path']] + filter_arg
                 else:
                     self.status_text = "FILE ERROR"
             elif src['type'] == 'tone':
@@ -894,7 +948,28 @@ class SourceChannel:
                     if parts[8]: map_arg = ['-map', f"0:i:{parts[8]}"]
                     elif parts[7]: map_arg = ['-map', f"0:p:{parts[7]}:a:0"]
 
+            # UECP: add a passthrough copy of the compressed audio for the tap once this input's codec
+            # is known (from a previous run's "Stream mapping" line) to be one that can carry UECP.
+            uecp_input = (cmd[cmd.index('-i') + 1], tuple(map_arg))
+            uecp_allowed = src['type'] in uecp.SOURCE_TYPES and uecp_input not in self.uecp_failed_inputs
+            self.uecp_error = ""
+            self.detected_codec = None
+            tap_codec = self._uecp_wanted_codec(UECP_CODEC_CACHE.get(uecp_input)) if uecp_allowed else None
+            tap = None
+            if tap_codec:
+                try:
+                    tap = uecp.UecpTap(tap_codec, self._on_uecp_frame)
+                    if not map_arg: map_arg = ['-map', '0:a:0'] # both outputs must use the same stream
+                except Exception as e:
+                    self.uecp_error = f"UECP tap failed: {e}"
+            self.uecp_tap = tap
+            uecp_checked = False
+            restart_for_uecp = False
+            got_audio = False
+            exited_by_itself = False
+
             cmd.extend(map_arg + ['-f', 's16le', '-ac', str(CHANNELS), '-ar', str(SAMPLE_RATE), '-acodec', 'pcm_s16le', 'pipe:1'])
+            if tap: cmd.extend(tap.output_args(map_arg[1]))
             self.status_text = "BUFFERING"
 
             try:
@@ -921,9 +996,19 @@ class SourceChannel:
                     if self.status_text == "BUFFERING":
                         self.status_text = "PLAYING"
                         self.play_start_time = time.time()
-                        
+
                     self.last_data_time = time.time()
-                    
+                    got_audio = True
+
+                    # First time the codec is known: remember it, and relaunch ffmpeg if the UECP tap
+                    # should be added or removed (normally only on the very first connection to an input)
+                    if uecp_allowed and not uecp_checked and self.detected_codec:
+                        uecp_checked = True
+                        UECP_CODEC_CACHE[uecp_input] = self.detected_codec
+                        if self._uecp_wanted_codec(self.detected_codec) != tap_codec:
+                            restart_for_uecp = True
+                            break
+
                     if active_type == 'scheduler':
                         if time.time() - getattr(self, 'last_schedule_check', 0) > 1.0:
                             self.last_schedule_check = time.time()
@@ -988,10 +1073,22 @@ class SourceChannel:
             finally:
                 is_normal_eof = False
                 if self.process:
+                    exited_by_itself = self.process.poll() is not None
                     if self.process.poll() == 0: is_normal_eof = True
                     try: self.process.kill()
                     except: pass
-            
+                if tap:
+                    # ffmpeg opened the copy output but exited before producing audio: it can't copy
+                    # this input, so don't try again for it (until the engine restarts)
+                    if tap.connected and exited_by_itself and not got_audio:
+                        self.uecp_failed_inputs.add(uecp_input)
+                        add_internal_log(f"UECP: ffmpeg could not copy the audio of {CONFIG['sources'][self.index]['name']}, UECP disabled for this input.", "ERROR")
+                    self.uecp_tap = None
+                    tap.close()
+
+            if restart_for_uecp and self.running:
+                continue
+
             if self.running and valid and is_normal_eof and src['type'] in ['file', 'backup_dir', 'scheduler']:
                 if target_path:
                     self.saved_positions[target_path] = 0.0
@@ -1056,13 +1153,17 @@ class BroadcastEngine:
         
         self.channels = [SourceChannel(i) for i in range(3)]
         self.analysis_active = False
-        
+        self.uecp_router = uecp.UecpRouter(add_internal_log) # kept across engine restarts
+
         self.t_monitor = threading.Thread(target=self._monitor_loop, args=(self.run_id,), daemon=True)
         self.t_monitor.start()
-        
+
         self.t_meta = threading.Thread(target=self._meta_loop, args=(self.run_id,), daemon=True)
         self.t_meta.start()
-        
+
+        self.t_uecp = threading.Thread(target=self._uecp_loop, args=(self.run_id,), daemon=True)
+        self.t_uecp.start()
+
         self.start_audio_stream()
         if '--is-restart' in sys.argv:
             add_internal_log("Audio engine restarted.", "SYSTEM")
@@ -1213,7 +1314,10 @@ class BroadcastEngine:
         
         self.t_meta = threading.Thread(target=self._meta_loop, args=(self.run_id,), daemon=True)
         self.t_meta.start()
-        
+
+        self.t_uecp = threading.Thread(target=self._uecp_loop, args=(self.run_id,), daemon=True)
+        self.t_uecp.start()
+
         if hardware_changed:
             self.start_audio_stream()
         add_internal_log("Audio engine restarted.", "SYSTEM")
@@ -1514,6 +1618,69 @@ class BroadcastEngine:
             if s:
                 try: s.close()
                 except: pass
+
+    def _output_latency_sec(self):
+        try:
+            if self.stream is not None: return float(self.stream.latency)
+        except: pass
+        return float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
+
+    def _uecp_loop(self, current_run_id):
+        # With "delay to match the audio" (default), each validated UECP frame is released once the
+        # audio it arrived with has left the source's buffer, plus the output device latency, and
+        # only if that source was on air at that moment. Without it, frames go out as soon as they
+        # are extracted, if their source is on air.
+        scheduled = collections.deque() # (due_time, src_idx, frame)
+        last_prune = 0
+        while self.running and self.run_id == current_run_id:
+            try:
+                now = time.time()
+                latency = None
+                for i, ch in enumerate(self.channels):
+                    sync = CONFIG['sources'][i].get('uecp_sync_audio', True)
+                    played = ch.uecp_pending.pop_played(ch.queue.frames_out if sync else float('inf'))
+                    if not played: continue
+                    if i != self.current_source_idx or not CONFIG['sources'][i].get('uecp_enabled'): continue
+                    if not sync:
+                        for frame in played:
+                            self.uecp_router.send(CONFIG['sources'][i], frame)
+                        continue
+                    if latency is None: latency = self._output_latency_sec()
+                    for frame in played:
+                        scheduled.append((now + latency, i, frame))
+
+                while scheduled and scheduled[0][0] <= now:
+                    _, i, frame = scheduled.popleft()
+                    self.uecp_router.send(CONFIG['sources'][i], frame)
+
+                if now - last_prune > 5:
+                    last_prune = now
+                    self.uecp_router.prune({uecp.output_key(s) for s in CONFIG['sources'] if s.get('uecp_enabled')})
+            except Exception as e:
+                logging.error(f"UECP loop error: {e}")
+            time.sleep(0.01)
+
+    def get_uecp_status(self):
+        result = []
+        for i, ch in enumerate(self.channels):
+            src = CONFIG['sources'][i]
+            codec = ch.detected_codec
+            info = {
+                'type_ok': src['type'] in uecp.SOURCE_TYPES,
+                'codec': uecp.codec_label(codec),
+                'supported': (codec in uecp.SUPPORTED_CODECS) if codec else None,
+                'enabled': bool(src.get('uecp_enabled')),
+                'active': ch.uecp_tap is not None,
+                'frames': ch.uecp_frames,
+                'crc_errors': ch.uecp_crc_errors,
+                'error': ch.uecp_error,
+                'output': '',
+                'sent': 0,
+            }
+            if info['enabled']:
+                info['output'], info['sent'] = self.uecp_router.status(src)
+            result.append(info)
+        return result
 
     def _monitor_loop(self, current_run_id):
         block_duration = BLOCK_SIZE / SAMPLE_RATE
@@ -2035,6 +2202,22 @@ def index():
                 src['meta_tcp_custom_prefix'] = request.form.get(f'meta_tcp_custom_prefix{i}', '')
                 src['alert_silent'] = (request.form.get(f'alert_silent{i}') == 'on')
                 src['alert_unreachable'] = (request.form.get(f'alert_unreachable{i}') == 'on')
+
+                # UECP forwarding. Enabling changes the ffmpeg command, so restart; the output
+                # settings are read live by the UECP router and need no restart.
+                new_uecp_enabled = (request.form.get(f'uecp_enabled{i}') == 'on') and new_type in uecp.SOURCE_TYPES
+                if bool(src.get('uecp_enabled')) != new_uecp_enabled:
+                    needs_restart = True
+                src['uecp_enabled'] = new_uecp_enabled
+                new_uecp_output = request.form.get(f'uecp_output{i}', 'tcp')
+                src['uecp_output'] = new_uecp_output if new_uecp_output in uecp.OUTPUT_METHODS else 'tcp'
+                src['uecp_host'] = request.form.get(f'uecp_host{i}', src.get('uecp_host', '127.0.0.1')).strip()
+                try: src['uecp_port'] = int(request.form.get(f'uecp_port{i}', src.get('uecp_port', 8300)))
+                except ValueError: pass
+                src['uecp_sync_audio'] = (request.form.get(f'uecp_sync_audio{i}') == 'on')
+                src['uecp_serial_port'] = request.form.get(f'uecp_serial_port{i}', src.get('uecp_serial_port', '')).strip()
+                try: src['uecp_serial_baud'] = int(request.form.get(f'uecp_serial_baud{i}', src.get('uecp_serial_baud', 115200)))
+                except ValueError: pass
                 
                 # Test Tone parameters
                 src['tone_wave'] = request.form.get(f'tone_wave{i}', 'sine')
@@ -2065,7 +2248,7 @@ def index():
     except: pass
     
     audio_files = get_audio_files_info()
-    return render_template('index.html', login_needed=False, cfg=safe_cfg, devices=devs, in_devices=in_devs, audio_files=audio_files)
+    return render_template('index.html', login_needed=False, cfg=safe_cfg, devices=devs, in_devices=in_devs, audio_files=audio_files, serial_ports=uecp.list_serial_ports(), uecp_source_types=uecp.SOURCE_TYPES)
 
 @app.route('/probe_programs', methods=['POST'])
 def probe_programs():
@@ -2623,6 +2806,7 @@ def socket_emit_loop():
                 'ram': cached_ram,
                 'src_statuses': statuses,
                 'codecs': codecs,
+                'uecp': engine.get_uecp_status(),
                 'now_playing': np_str
             })
         except: pass
