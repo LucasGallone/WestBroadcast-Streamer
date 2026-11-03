@@ -2494,7 +2494,7 @@ def logs_export():
     
     lang = CONFIG['server'].get('language', 'en')
     date_str = datetime.now().strftime('%d-%m-%Y')
-    filename = f"WB-Encoder_Logs_{date_str}.txt"
+    filename = f"WB-Streamer_Logs_{date_str}.txt"
     
     def generate():
         if lang == 'fr':
