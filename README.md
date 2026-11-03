@@ -145,7 +145,9 @@ This project uses the following libraries, automatically installed by the Launch
 • pySerial: BSD-3-Clause License.
 - - -
 ### UECP (RDS) forwarding and aac_uecp_x64.dll
-Sources playing MP2 or AAC (ADTS or LATM) audio can forward the UECP frames carried inside the audio (MP2 ancillary data, AAC data stream elements) to an RDS encoder, over TCP, UDP or a serial port. Anything the encoder sends back is read and ignored. Only the source on air forwards (optionally delayed to match its audio), and frames with a bad CRC are dropped.
+Sources playing MP2 or AAC (ADTS or LATM) audio can forward the UECP frames carried inside the audio (MP2 ancillary data, AAC data stream elements) to an RDS encoder, over TCP, UDP or a serial port.
+<br>
+Anything the encoder sends back is read and ignored. Only the source on air forwards (optionally delayed to match its audio), and frames with a bad CRC are dropped.
 <br>
 <br>
 AAC extraction uses `aac_uecp_x64.dll`, built from `native/aac_uecp` (FAAD2-based decoder from UecpBridge).
