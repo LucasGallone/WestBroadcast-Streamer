@@ -2491,13 +2491,95 @@ def api_logs():
 @app.route('/logs_export')
 def logs_export():
     if not session.get('logged_in'): return get_perm_err(), 403
+    
+    lang = CONFIG['server'].get('language', 'en')
+    date_str = datetime.now().strftime('%d-%m-%Y')
+    filename = f"WB-Encoder_Logs_{date_str}.txt"
+    
     def generate():
-        yield "Timestamp | Type | Event\n"
-        yield "--------------------------\n"
-        for log in INTERNAL_LOGS:
-            yield f"{log['timestamp']} | {log['level']} | {log['event']}\n"
-    return Response(generate(), mimetype="text/plain", headers={"Content-Disposition": "attachment;filename=logs.txt"})
-
+        if lang == 'fr':
+            yield "Horodatage | Type | Événement\n"
+            yield "--------------------------\n"
+            
+            fr_dict_py = {
+                "Audio engine restarted.": "Moteur audio redémarré.",
+                "Audio engine started.": "Moteur audio démarré.",
+                "Playlists updated.": "Playlists mises à jour.",
+                "Scheduler updated.": "Planificateur mis à jour.",
+                "FM/Tone settings updated.": "Paramètres FM/Tonalité mis à jour.",
+                "SMTP settings updated.": "Paramètres SMTP mis à jour.",
+                "Logs cleared by user.": "Journaux effacés par l'utilisateur.",
+                "Automatic mode enabled.": "Mode automatique activé.",
+                "System restart requested.": "Redémarrage du système demandé.",
+                "Factory restore requested.": "Restauration d'usine demandée.",
+                "Configuration imported.": "Configuration importée."
+            }
+            
+            fr_regex_py = [
+                (r"3 failed login attempts from IP (.+)", r"3 tentatives de connexion échouées depuis l'IP \1"),
+                (r"Successful login from IP (.+) as Administrator\.", r"Connexion réussie depuis l'IP \1 (Administrateur)."),
+                (r"Successful login from IP (.+) as Operator\.", r"Connexion réussie depuis l'IP \1 (Opérateur)."),
+                (r"Failed login attempt from IP (.+)", r"Tentative de connexion échouée depuis l'IP \1"),
+                (r"Manual mode enabled\. Forcing playback of MAIN SOURCE\.", r"Mode manuel activé. Lecture forcée de SOURCE PRINCIPALE."),
+                (r"Manual mode enabled\. Forcing playback of BACKUP SOURCE 1\.", r"Mode manuel activé. Lecture forcée de SOURCE DE SECOURS 1."),
+                (r"Manual mode enabled\. Forcing playback of BACKUP SOURCE 2\.", r"Mode manuel activé. Lecture forcée de SOURCE DE SECOURS 2."),
+                (r"Manual mode enabled\. Forcing playback of (.+)\.", r"Mode manuel activé. Lecture forcée de \1."),
+                (r"HTTP Port changed from (\d+) to (\d+)\. System restart requested\.", r"Port HTTP modifié de \1 vers \2. Redémarrage demandé."),
+                (r"Audio Analysis engine started\.", r"Moteur d'analyse audio démarré."),
+                (r"Audio Analysis engine stopped\.", r"Moteur d'analyse audio arrêté."),
+                (r"Backup audio file uploaded: (.+)", r"Fichier de secours importé : \1"),
+                (r"Audio file deleted: (.+)", r"Fichier audio supprimé : \1"),
+                (r"Silence detected on MAIN SOURCE\. Switching to BACKUP SOURCE 1\.", r"Silence détecté sur SOURCE PRINCIPALE. Bascule vers SOURCE DE SECOURS 1."),
+                (r"Silence detected on MAIN SOURCE\. Switching to BACKUP SOURCE 2\.", r"Silence détecté sur SOURCE PRINCIPALE. Bascule vers SOURCE DE SECOURS 2."),
+                (r"Silence detected on BACKUP SOURCE 1\. Switching to MAIN SOURCE\.", r"Silence détecté sur SOURCE DE SECOURS 1. Bascule vers SOURCE PRINCIPALE."),
+                (r"Silence detected on BACKUP SOURCE 1\. Switching to BACKUP SOURCE 2\.", r"Silence détecté sur SOURCE DE SECOURS 1. Bascule vers SOURCE DE SECOURS 2."),
+                (r"Silence detected on BACKUP SOURCE 2\. Switching to MAIN SOURCE\.", r"Silence détecté sur SOURCE DE SECOURS 2. Bascule vers SOURCE PRINCIPALE."),
+                (r"Silence detected on BACKUP SOURCE 2\. Switching to BACKUP SOURCE 1\.", r"Silence détecté sur SOURCE DE SECOURS 2. Bascule vers SOURCE DE SECOURS 1."),
+                (r"MAIN SOURCE unreachable\. Switching to BACKUP SOURCE 1\.", r"SOURCE PRINCIPALE inaccessible. Bascule vers SOURCE DE SECOURS 1."),
+                (r"MAIN SOURCE unreachable\. Switching to BACKUP SOURCE 2\.", r"SOURCE PRINCIPALE inaccessible. Bascule vers SOURCE DE SECOURS 2."),
+                (r"BACKUP SOURCE 1 unreachable\. Switching to MAIN SOURCE\.", r"SOURCE DE SECOURS 1 inaccessible. Bascule vers SOURCE PRINCIPALE."),
+                (r"BACKUP SOURCE 1 unreachable\. Switching to BACKUP SOURCE 2\.", r"SOURCE DE SECOURS 1 inaccessible. Bascule vers SOURCE DE SECOURS 2."),
+                (r"BACKUP SOURCE 2 unreachable\. Switching to MAIN SOURCE\.", r"SOURCE DE SECOURS 2 inaccessible. Bascule vers SOURCE PRINCIPALE."),
+                (r"BACKUP SOURCE 2 unreachable\. Switching to BACKUP SOURCE 1\.", r"SOURCE DE SECOURS 2 inaccessible. Bascule vers SOURCE DE SECOURS 1."),
+                (r"Normal broadcasting has resumed on MAIN SOURCE\.", r"SOURCE PRINCIPALE : Diffusion rétablie."),
+                (r"Normal broadcasting has resumed on BACKUP SOURCE 1\.", r"SOURCE DE SECOURS 1 : Diffusion rétablie."),
+                (r"Normal broadcasting has resumed on BACKUP SOURCE 2\.", r"SOURCE DE SECOURS 2 : Diffusion rétablie."),
+                (r"Silence detected on (.+)\. Switching to (.+)\.", r"Silence détecté sur \1. Bascule vers \2."),
+                (r"Silence detected on (.+)\.", r"Silence détecté sur \1."),
+                (r"(.+) unreachable\. Switching to (.+)\.", r"\1 inaccessible. Bascule vers \2."),
+                (r"(.+) unreachable\.", r"\1 inaccessible."),
+                (r"Audio recovery triggered\. Switching back to (.+)\.", r"Rétablissement audio détecté. Bascule sur \1."),
+                (r"Normal broadcasting has resumed on (.+)\.", r"\1 : Diffusion rétablie."),
+                (r"Email sent: (.+)", r"Mail envoyé : \1"),
+                (r"SMTP Error: (.+)", r"Erreur SMTP : \1"),
+                (r"UECP: ffmpeg could not copy the audio of (.+), UECP disabled for this input\.", r"UECP : ffmpeg n'a pas pu copier l'audio de \1, UECP désactivé pour cette entrée."),
+                (r"Audio Output Error: (.+)", r"\1 : Erreur sortie audio"),
+                (r"TCP Metadata failed for (.+)", r"\1 : Erreur métadonnées TCP"),
+                (r"Metadata file export error: (.+)", r"Erreur d'export du fichier de métadonnées : \1"),
+                (r"Config POST Error: (.+)", r"Erreur d'enregistrement de la configuration : \1"),
+                (r"Metadata trigger '(.+)' detected on (.+)\. Switching to (.+)\.", r"Déclencheur métadonnées '\1' détecté sur \2. Basculement vers \3."),
+                (r"Metadata return trigger '(.+)' detected on (.+)\. Switching back\.", r"Déclencheur de retour '\1' détecté sur \2. Retour à la source d'origine.")
+            ]
+            
+            for log in INTERNAL_LOGS:
+                evt = log['event']
+                if evt in fr_dict_py:
+                    evt = fr_dict_py[evt]
+                else:
+                    for rx, rep in fr_regex_py:
+                        new_evt = re.sub(rx, rep, evt)
+                        if new_evt != evt:
+                            evt = new_evt
+                            break
+                            
+                yield f"{log['timestamp']} | {log['level']} | {evt}\n"
+        else:
+            yield "Timestamp | Type | Event\n"
+            yield "--------------------------\n"
+            for log in INTERNAL_LOGS:
+                yield f"{log['timestamp']} | {log['level']} | {log['event']}\n"
+                
+    return Response(generate(), mimetype="text/plain", headers={"Content-Disposition": f"attachment;filename={filename}"})
 @app.route('/api/logs/clear', methods=['POST'])
 def clear_logs():
     if not session.get('logged_in'): return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
