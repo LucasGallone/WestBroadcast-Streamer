@@ -151,4 +151,4 @@ Sources playing MP2 or AAC (ADTS or LATM) audio can forward the UECP frames carr
 AAC extraction uses `aac_uecp_x64.dll`, built from `native/aac_uecp` (FAAD2-based decoder from UecpBridge). To rebuild it: `cmake -S native/aac_uecp -B build -A x64` then `cmake --build build --config Release`.
 <br>
 <br>
-• License: FAAD2 is licensed under the GNU General Public License (GPL) v2 or later.
+License: FAAD2 is licensed under the GNU General Public License (GPL) v2 or later.
