@@ -148,7 +148,9 @@ This project uses the following libraries, automatically installed by the Launch
 Sources playing MP2 or AAC (ADTS or LATM) audio can forward the UECP frames carried inside the audio (MP2 ancillary data, AAC data stream elements) to an RDS encoder, over TCP, UDP or a serial port. Anything the encoder sends back is read and ignored. Only the source on air forwards (optionally delayed to match its audio), and frames with a bad CRC are dropped.
 <br>
 <br>
-AAC extraction uses `aac_uecp_x64.dll`, built from `native/aac_uecp` (FAAD2-based decoder from UecpBridge). To rebuild it: `cmake -S native/aac_uecp -B build -A x64` then `cmake --build build --config Release`.
+AAC extraction uses `aac_uecp_x64.dll`, built from `native/aac_uecp` (FAAD2-based decoder from UecpBridge).
+<br>
+To rebuild it: `cmake -S native/aac_uecp -B build -A x64` then `cmake --build build --config Release`.
 <br>
 <br>
 License: FAAD2 is licensed under the GNU General Public License (GPL) v2 or later.
