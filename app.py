@@ -523,12 +523,15 @@ class SourceChannel:
                         with urllib.request.urlopen(req, timeout=3) as response:
                             headers = response.headers
                             c_type = headers.get('Content-Type', '').split(';')[0].replace('audio/', '').upper()
-                            if 'MPEG' in c_type: c_type = 'MP3'
+                            if c_type == 'MPEG':
+                                c_type = '' # Check if the codec is MP2 or MP3
+                            elif 'MPEG' in c_type: 
+                                c_type = 'MP3'
                             br = headers.get('icy-br') or headers.get('ice-bitrate')
                             info_parts = []
                             if c_type and len(c_type) < 12: info_parts.append(c_type)
                             if br: info_parts.append(f"{br} Kbps")
-                            if info_parts: self.codec_info = " - ".join(info_parts)
+                            if c_type and info_parts: self.codec_info = " - ".join(info_parts)
                     except: pass
 
                 # Fallback to ffprobe (reliable) if fast path failed or missing bitrate
@@ -2451,7 +2454,7 @@ def smtp_test():
 
 @app.route('/api/logs')
 def api_logs():
-    if not session.get('logged_in'): return jsonify({'logs': [], 'total': 0, 'page': 1})
+    if not session.get('logged_in'): return jsonify({'logs': [], 'total': 0, 'page': 1, 'total_pages': 1})
     
     # Retrieving pagination and filter settings
     try: page = int(request.args.get('page', 1))
