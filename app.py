@@ -225,6 +225,11 @@ app.config['SECRET_KEY'] = os.urandom(24)
 app.config['SESSION_COOKIE_NAME'] = 'wb_streamer_session'
 socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*')
 
+@app.before_request
+def check_auth():
+    if request.path.startswith('/api/') and not session.get('logged_in'):
+        return jsonify({"error": "Unauthorized"}), 401
+
 DIALOG_QUEUE = queue.Queue()
 DIALOG_RESULTS = {}
 
@@ -2068,19 +2073,20 @@ def get_perm_err():
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    # Handling connection errors caused by redirects
-    login_error = (request.args.get('error') == '1')
-    login_lockout = (request.args.get('error') == 'lockout')
+    client_ip = request.remote_addr
+    now = time.time()
+    if client_ip not in LOGIN_ATTEMPTS:
+        LOGIN_ATTEMPTS[client_ip] = {"count": 0, "lock_until": 0}
+
+    login_lockout = (not session.get('logged_in') and LOGIN_ATTEMPTS[client_ip]["lock_until"] > now)
+    login_error = False if login_lockout else session.pop('login_error', False)
     
-    # Security logic in order to hide the accounts passwords (admin + operator) in the source code if the user is not logged in
-    safe_cfg = CONFIG
-    if not session.get('logged_in') or session.get('role') != 'admin':
+    if not session.get('logged_in'): 
+        # Always hide all passwords (admin, operator, SMTP) from the rendered HTML source code
         safe_cfg = json.loads(json.dumps(CONFIG))
         safe_cfg['server']['password'] = ''
         safe_cfg['server']['op_pass'] = ''
         safe_cfg['smtp']['pass'] = ''
-    
-    if not session.get('logged_in'): 
         return render_template('index.html', login_needed=True, cfg=safe_cfg, login_error=login_error, login_lockout=login_lockout)
         
     if request.method == 'POST':
@@ -2250,6 +2256,12 @@ def index():
         in_devs.sort(key=lambda x: x['name'])
     except: pass
     
+    # Always hide all passwords (admin, operator, SMTP) from the rendered HTML source code
+    safe_cfg = json.loads(json.dumps(CONFIG))
+    safe_cfg['server']['password'] = ''
+    safe_cfg['server']['op_pass'] = ''
+    safe_cfg['smtp']['pass'] = ''
+
     audio_files = get_audio_files_info()
     return render_template('index.html', login_needed=False, cfg=safe_cfg, devices=devs, in_devices=in_devs, audio_files=audio_files, serial_ports=uecp.list_serial_ports(), uecp_source_types=uecp.SOURCE_TYPES)
 
@@ -2373,7 +2385,7 @@ def update_fm():
 
 @app.route('/update_smtp', methods=['POST'])
 def update_smtp():
-    if not session.get('logged_in'): return get_perm_err(), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return get_perm_err(), 403
     try:
         CONFIG['smtp']['enabled'] = (request.form.get('smtp_enabled') == 'on')
         CONFIG['smtp']['host'] = request.form.get('smtp_host')
@@ -2399,7 +2411,7 @@ def update_smtp():
 
 @app.route('/smtp_test', methods=['POST'])
 def smtp_test():
-    if not session.get('logged_in'): return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
     
     cfg_smtp = CONFIG['smtp']
     if not cfg_smtp['host']:
@@ -2454,7 +2466,7 @@ def smtp_test():
 
 @app.route('/api/logs')
 def api_logs():
-    if not session.get('logged_in'): return jsonify({'logs': [], 'total': 0, 'page': 1, 'total_pages': 1})
+    if not session.get('logged_in') or session.get('role') != 'admin': return jsonify({'logs': [], 'total': 0, 'page': 1, 'total_pages': 1}), 403   
     
     # Retrieving pagination and filter settings
     try: page = int(request.args.get('page', 1))
@@ -2493,7 +2505,7 @@ def api_logs():
 
 @app.route('/logs_export')
 def logs_export():
-    if not session.get('logged_in'): return get_perm_err(), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return get_perm_err(), 403
     
     lang = CONFIG['server'].get('language', 'en')
     date_str = datetime.now().strftime('%d-%m-%Y')
@@ -2585,7 +2597,7 @@ def logs_export():
     return Response(generate(), mimetype="text/plain", headers={"Content-Disposition": f"attachment;filename={filename}"})
 @app.route('/api/logs/clear', methods=['POST'])
 def clear_logs():
-    if not session.get('logged_in'): return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
     INTERNAL_LOGS.clear()
     add_internal_log("Logs cleared by user.", "SYSTEM")
     return jsonify({'status': 'ok'})
@@ -2595,39 +2607,57 @@ def login():
     ip = request.remote_addr
     now = time.time()
     
-    # Clearing login attempts older than 90 seconds
-    if ip in LOGIN_ATTEMPTS:
-        LOGIN_ATTEMPTS[ip] = [t for t in LOGIN_ATTEMPTS[ip] if now - t < 90]
-    
-    # Attempts amount verification
-    if len(LOGIN_ATTEMPTS.get(ip, [])) >= 3:
+    if ip not in LOGIN_ATTEMPTS:
+        LOGIN_ATTEMPTS[ip] = {"count": 0, "lock_until": 0}
+        
+    # Bruteforce protection: Temporary access block for 90 seconds after 3 failed attempts
+    if LOGIN_ATTEMPTS[ip]["lock_until"] > now:
         add_internal_log(f"3 failed login attempts from IP {ip}", "AUTH")
-        return redirect(url_for('index', error='lockout'))
+        return redirect(url_for('index'))
 
     # Credentials verification
     if request.form.get('username') == CONFIG['server']['user'] and request.form.get('password') == CONFIG['server']['password']:
         session['logged_in'] = True
         session['role'] = 'admin' # Administrator role attribution
-        if ip in LOGIN_ATTEMPTS: del LOGIN_ATTEMPTS[ip] 
+        LOGIN_ATTEMPTS[ip] = {"count": 0, "lock_until": 0}
         add_internal_log(f"Successful login from IP {ip} as Administrator.", "AUTH")
         return redirect(url_for('index'))
         
     elif CONFIG['server'].get('op_enabled') and request.form.get('username') == CONFIG['server'].get('op_user') and request.form.get('password') == CONFIG['server'].get('op_pass'):
         session['logged_in'] = True
         session['role'] = 'operator' # Operator role attribution
-        if ip in LOGIN_ATTEMPTS: del LOGIN_ATTEMPTS[ip]
+        LOGIN_ATTEMPTS[ip] = {"count": 0, "lock_until": 0}
         add_internal_log(f"Successful login from IP {ip} as Operator.", "AUTH")
         return redirect(url_for('index'))
     else:
         # Logging failed attempt(s)
-        if ip not in LOGIN_ATTEMPTS: LOGIN_ATTEMPTS[ip] = []
-        LOGIN_ATTEMPTS[ip].append(now)
-        
-        add_internal_log(f"Failed login attempt from IP {ip}", "AUTH")
-        return redirect(url_for('index', error='1'))
+        LOGIN_ATTEMPTS[ip]["count"] += 1
+        if LOGIN_ATTEMPTS[ip]["count"] >= 3:
+            LOGIN_ATTEMPTS[ip]["lock_until"] = now + 90
+            LOGIN_ATTEMPTS[ip]["count"] = 0
+            add_internal_log(f"3 failed login attempts from IP {ip}", "AUTH")
+        else:
+            session['login_error'] = True
+            add_internal_log(f"Failed login attempt from IP {ip}", "AUTH")
+        return redirect(url_for('index'))
 
 @app.route('/logout')
-def logout(): session.pop('logged_in', None); return redirect(url_for('index'))
+def logout():
+    session.pop('logged_in', None)
+    session.pop('role', None)
+    return redirect(url_for('index'))
+
+@app.route('/api/credentials', methods=['GET'])
+def get_credentials():
+    if not session.get('logged_in') or session.get('role') != 'admin':
+        return jsonify({"error": "Forbidden"}), 403
+    resp = jsonify({
+        'srv_pass': CONFIG['server'].get('password', ''),
+        'op_pass': CONFIG['server'].get('op_pass', ''),
+        'smtp_pass': CONFIG['smtp'].get('pass', '')
+    })
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
 
 @app.route('/set_mode', methods=['POST'])
 def set_mode():
@@ -2687,7 +2717,7 @@ def set_mode():
 
 @app.route('/update_security', methods=['POST'])
 def update_security():
-    if not session.get('logged_in'): return get_perm_err(), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return get_perm_err(), 403
     try:
         old_port = CONFIG['server']['port']
         new_port = int(request.form.get('srv_port'))
@@ -2744,7 +2774,7 @@ def sys_restart():
 
 @app.route('/sys_restore')
 def sys_restore():
-    if not session.get('logged_in'): return get_perm_err(), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return get_perm_err(), 403
     global CONFIG
     CONFIG = DEFAULT_CONFIG.copy() 
     save_config(DEFAULT_CONFIG)    
@@ -2760,7 +2790,7 @@ def sys_restore():
 
 @app.route('/sys_export')
 def sys_export():
-    if not session.get('logged_in'): return get_perm_err(), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return get_perm_err(), 403
     save_config(CONFIG)
     return send_file(CONFIG_FILE, as_attachment=True, download_name='config.json')
 
@@ -2778,7 +2808,7 @@ def browse_file():
 
 @app.route('/sys_import', methods=['POST'])
 def sys_import():
-    if not session.get('logged_in'): return get_perm_err(), 403
+    if not session.get('logged_in') or session.get('role') != 'admin': return get_perm_err(), 403
     if 'config_file' not in request.files: return "No file"
     file = request.files['config_file']
     if file.filename == '': return "No filename"
