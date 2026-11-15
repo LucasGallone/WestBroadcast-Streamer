@@ -2082,7 +2082,6 @@ def index():
     login_error = False if login_lockout else session.pop('login_error', False)
     
     if not session.get('logged_in'): 
-        # Always hide all passwords (admin, operator, SMTP) from the rendered HTML source code
         safe_cfg = json.loads(json.dumps(CONFIG))
         safe_cfg['server']['password'] = ''
         safe_cfg['server']['op_pass'] = ''
@@ -2256,7 +2255,6 @@ def index():
         in_devs.sort(key=lambda x: x['name'])
     except: pass
     
-    # Always hide all passwords (admin, operator, SMTP) from the rendered HTML source code
     safe_cfg = json.loads(json.dumps(CONFIG))
     safe_cfg['server']['password'] = ''
     safe_cfg['server']['op_pass'] = ''
