@@ -16,6 +16,7 @@ import re
 import socket
 import smtplib
 import ssl
+import base64
 import unicodedata
 from email.utils import formatdate
 from email.mime.text import MIMEText
@@ -56,9 +57,9 @@ DEFAULT_CONFIG = {
     'server': {'port': 8090, 'user': 'admin', 'password': 'admin', 'instance_name': '', 'op_user': 'operator', 'op_pass': 'operator', 'op_enabled': False, 'op_audio_access': False, 'op_fm_access': False, 'op_allow_restart': False, 'op_backup_access': False, 'hide_bg_on_login': False, 'peak_hold_enabled': False, 'peak_hold_time': 3, 'monitor_cpu_ram': False, 'language': 'en'},
     'audio': {'output_device': None, 'output_gain_db': 0.0, 'output_latency_ms': 1000},
     'sources': [
-        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True},
-        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True},
-        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True}
+        {'name': 'Main Source', 'type': 'stream', 'url': 'http://stream.srg-ssr.ch/m/couleur3/mp3_128', 'icecast_url': '', 'icecast_mount': '', 'icecast_user': '', 'icecast_pass': '', 'rtp_uri': '', 'path': '', 'input_device': None, 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-main.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True},
+        {'name': 'Backup Source 1', 'type': 'stream', 'url': '', 'icecast_url': '', 'icecast_mount': '', 'icecast_user': '', 'icecast_pass': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup1.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True},
+        {'name': 'Backup Source 2', 'type': 'stream', 'url': '', 'icecast_url': '', 'icecast_mount': '', 'icecast_user': '', 'icecast_pass': '', 'rtp_uri': '', 'path': '', 'repeat': True, 'gain': 0.0, 'meta_enabled': False, 'meta_path': 'metadata-backup2.txt', 'meta_only_played': False, 'meta_normalize': True, 'meta_uppercase': False, 'meta_rtplus': False, 'meta_rtplus_format': 'artist_title', 'max_latency_ms': 6000, 'memorize_pos': False, 'alert_silent': False, 'alert_unreachable': False, 'tone_wave': 'sine', 'tone_freq': 1000, 'sid': '', 'service_name': '', 'uecp_enabled': False, 'uecp_output': 'tcp', 'uecp_host': '127.0.0.1', 'uecp_port': 8300, 'uecp_serial_port': '', 'uecp_serial_baud': 115200, 'uecp_sync_audio': True}
     ],
     'settings': {
         'loss_threshold_db': -45.0,
@@ -128,6 +129,10 @@ def load_config():
                 if src['type'] == 'rtp': src['type'] = 'rtp_mpegts'
                 if 'path' not in src or src['path'] is None: src['path'] = ''
                 if 'url' not in src or src['url'] is None: src['url'] = ''
+                if 'icecast_url' not in src or src['icecast_url'] is None: src['icecast_url'] = ''
+                if 'icecast_mount' not in src or src['icecast_mount'] is None: src['icecast_mount'] = ''
+                if 'icecast_user' not in src or src['icecast_user'] is None: src['icecast_user'] = ''
+                if 'icecast_pass' not in src or src['icecast_pass'] is None: src['icecast_pass'] = ''
                 if 'backup_file' not in src: src['backup_file'] = ''
                 if 'backup_playlist_name' not in src: src['backup_playlist_name'] = ''
                 if 'backup_playlist_shuffle' not in src: src['backup_playlist_shuffle'] = False
@@ -295,6 +300,23 @@ def get_local_ip():
     finally:
         s.close()
     return IP
+
+def build_icecast_auth_url(src):
+    base = (src.get('icecast_url') or '').strip().rstrip('/')
+    mount = (src.get('icecast_mount') or '').strip()
+    if not base or not mount:
+        return ''
+    if not mount.startswith('/'):
+        mount = '/' + mount
+    return f"{base}{mount}"
+
+def get_icecast_auth_b64(src):
+    user = src.get('icecast_user') or ''
+    pwd = src.get('icecast_pass') or ''
+    if not user and not pwd:
+        return ''
+    token = f"{user}:{pwd}".encode('utf-8')
+    return base64.b64encode(token).decode('ascii')
 
 def normalize_text_content(text):
     if not text: return ""
@@ -491,6 +513,8 @@ class SourceChannel:
         # PROBE LOOP
         if (src['type'] == 'stream' or src['type'] == 'rtp') and (src['url'] or src['rtp_uri']):
             threading.Thread(target=self._probe_loop, daemon=True).start()
+        elif src['type'] == 'icecast_auth' and build_icecast_auth_url(src):
+            threading.Thread(target=self._probe_loop, daemon=True).start()
         elif src['type'] == 'file' and src['path']:
             threading.Thread(target=self._probe_loop, daemon=True).start()
         elif src['type'] == 'backup_dir' and src.get('backup_file'):
@@ -520,12 +544,18 @@ class SourceChannel:
                 src = CONFIG['sources'][self.index]
                 target = ""
                 
-                # IP Stream: Try fast path via HTTP Headers
-                if src['type'] == 'stream' and src['url']:
-                    target = src['url']
+                # IP Stream / Icecast Auth: Try fast path via HTTP/HTTPS Headers
+                if (src['type'] == 'stream' and src['url']) or (src['type'] == 'icecast_auth' and build_icecast_auth_url(src)):
+                    target = src['url'] if src['type'] == 'stream' else build_icecast_auth_url(src)
                     try:
-                        req = urllib.request.Request(src['url'], headers={'Icy-MetaData': '1', 'User-Agent': 'VLC/3.0.0'})
-                        with urllib.request.urlopen(req, timeout=3) as response:
+                        req_headers = {'Icy-MetaData': '1', 'User-Agent': 'VLC/3.0.0'}
+                        if src['type'] == 'icecast_auth':
+                            b64 = get_icecast_auth_b64(src)
+                            if b64:
+                                req_headers['Authorization'] = f'Basic {b64}'
+                        req = urllib.request.Request(target, headers=req_headers)
+                        ctx = ssl._create_unverified_context()
+                        with urllib.request.urlopen(req, timeout=3, context=ctx) as response:
                             headers = response.headers
                             c_type = headers.get('Content-Type', '').split(';')[0].replace('audio/', '').upper()
                             if c_type == 'MPEG':
@@ -540,7 +570,7 @@ class SourceChannel:
                     except: pass
 
                 # Fallback to ffprobe (reliable) if fast path failed or missing bitrate
-                if not self.codec_info or (src['type'] == 'stream' and 'Kbps' not in self.codec_info):
+                if not self.codec_info or (src['type'] in ['stream', 'icecast_auth'] and 'Kbps' not in self.codec_info):
                     if src['type'] == 'rtp_mpegts': target = src['rtp_uri']
                     elif src['type'] == 'rtp_sdp': target = src['path']
                     elif src['type'] == 'file': target = src['path']
@@ -571,6 +601,7 @@ class SourceChannel:
                             elif target.startswith('device:') or target.startswith('tone:'):
                                 target = ""
                     elif src['type'] == 'stream': target = src['url']
+                    elif src['type'] == 'icecast_auth': target = build_icecast_auth_url(src)
                     
                     if target:
                         try:
@@ -583,8 +614,14 @@ class SourceChannel:
                             exe_name = 'ffprobe.exe' if sys.platform == 'win32' else 'ffprobe'
                             ffprobe_path = os.path.join(base_path, exe_name)
 
+                            header_args = []
+                            if src['type'] == 'icecast_auth':
+                                b64 = get_icecast_auth_b64(src)
+                                if b64:
+                                    header_args = ['-headers', f'Authorization: Basic {b64}\r\n']
+
                             cmd = [ffprobe_path, '-v', 'quiet', '-print_format', 'json', '-show_streams', '-show_format',
-                                   '-analyzeduration', '5000000', '-probesize', '5000000', '-user_agent', 'VLC/3.0.0', target]
+                                   '-analyzeduration', '5000000', '-probesize', '5000000', '-user_agent', 'VLC/3.0.0'] + header_args + [target]
                             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
                             out, _ = proc.communicate(timeout=10)
                             data = json.loads(out)
@@ -601,7 +638,7 @@ class SourceChannel:
                 
                 # Safety: stop re-probing even if everything fails
                 if not self.codec_info and self.status_text == "PLAYING":
-                    self.codec_info = "IP STREAM" if src['type'] == 'stream' else "UNKNOWN"
+                    self.codec_info = "IP STREAM" if src['type'] in ['stream', 'icecast_auth'] else "UNKNOWN"
             
             time.sleep(5)   
 
@@ -614,6 +651,8 @@ class SourceChannel:
         
         is_hls = False
         if src['type'] == 'stream' and src.get('url') and '.m3u8' in src['url'].lower():
+            is_hls = True
+        elif src['type'] == 'icecast_auth' and '.m3u8' in build_icecast_auth_url(src).lower():
             is_hls = True
         elif src['type'] == 'scheduler':
             sched_t = get_scheduled_target(src.get('schedule_name', ''))
@@ -629,6 +668,7 @@ class SourceChannel:
             return "BUFFERING...", "#e67e22"
 
         if src['type'] == 'stream' and not src['url']: return "NOT CONFIGURED", "#999"
+        if src['type'] == 'icecast_auth' and not build_icecast_auth_url(src): return "NOT CONFIGURED", "#999"
         if src['type'] in ['rtp_mpegts', 'multiplex'] and not src['rtp_uri']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'rtp_sdp' and not src['path']: return "NOT CONFIGURED", "#999"
         if src['type'] == 'rtp_sdp' and src['path'] and not os.path.exists(src['path']): return "FILE NOT FOUND", "#b00"
@@ -922,6 +962,26 @@ class SourceChannel:
                 else: expr = f"if(gt(sin(2*PI*t*{freq}),0),1,-1)"
                 lavfi_str = f"aevalsrc='{expr}|{expr}:s={SAMPLE_RATE}'"
                 cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'error', '-re', '-f', 'lavfi', '-i', lavfi_str] + filter_arg
+            elif src['type'] == 'icecast_auth':
+                target_url = build_icecast_auth_url(src)
+                if target_url:
+                    valid = True
+                    b64 = get_icecast_auth_b64(src)
+                    header_args = ['-headers', f'Authorization: Basic {b64}\r\n'] if b64 else []
+                    if '.m3u8' in target_url.lower():
+                        cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats',
+                               '-re',
+                               '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                               '-rw_timeout', rw_timeout,
+                               '-user_agent', 'VLC/3.0.0', '-icy', '1'] + header_args + ['-i', target_url] + filter_arg
+                    else:
+                        cmd = [ffmpeg_path, '-hide_banner', '-loglevel', 'debug', '-nostats',
+                               '-fflags', 'nobuffer', '-flags', 'low_delay',
+                               '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '5',
+                               '-rw_timeout', rw_timeout,
+                               '-user_agent', 'VLC/3.0.0', '-icy', '1'] + header_args + ['-i', target_url] + filter_arg
+                else:
+                    self.status_text = "NO CONFIG"
             else: # stream
                 if src['url']:
                     valid = True
@@ -1356,6 +1416,13 @@ class BroadcastEngine:
                         raw_titles[i] = extracted
                     else:
                         title = raw_titles[i]
+                elif src['type'] == 'icecast_auth' and build_icecast_auth_url(src):
+                    extracted = self.channels[i].stream_title
+                    if extracted:
+                        title = extracted
+                        raw_titles[i] = extracted
+                    else:
+                        title = raw_titles[i]
                 elif src['type'] == 'file' and src['path']:
                     title = os.path.basename(src['path'])
                     raw_titles[i] = title
@@ -1701,7 +1768,7 @@ class BroadcastEngine:
                 
                 # 1. Start / Stop managmeent
                 should_run = False
-                if src_cfg['type'] == 'stream': should_run = True
+                if src_cfg['type'] in ['stream', 'icecast_auth']: should_run = True
                 elif src_cfg['type'] in ['rtp_mpegts', 'rtp_sdp', 'multiplex']: should_run = True 
                 elif src_cfg['type'] == 'tone': should_run = True
                 elif src_cfg['type'] == 'device': should_run = True
@@ -1716,6 +1783,7 @@ class BroadcastEngine:
                         if src_cfg.get('backup_mode', 'single') == 'single' and not src_cfg.get('backup_file'): should_run = False
                         if src_cfg.get('backup_mode', 'single') == 'playlist' and not src_cfg.get('backup_playlist_name'): should_run = False
                     if src_cfg['type'] == 'stream' and not src_cfg['url']: should_run = False
+                    if src_cfg['type'] == 'icecast_auth' and not build_icecast_auth_url(src_cfg): should_run = False
                     if src_cfg['type'] in ['rtp_mpegts', 'multiplex'] and not src_cfg['rtp_uri']: should_run = False
                     if src_cfg['type'] == 'device' and src_cfg.get('input_device') is None: should_run = False
 
@@ -1725,6 +1793,8 @@ class BroadcastEngine:
                 # 2. Technical timeout (FFmpeg failure scenario)
                 is_hls = False
                 if src_cfg['type'] == 'stream' and src_cfg.get('url') and '.m3u8' in src_cfg['url'].lower():
+                    is_hls = True
+                elif src_cfg['type'] == 'icecast_auth' and '.m3u8' in build_icecast_auth_url(src_cfg).lower():
                     is_hls = True
                 elif src_cfg['type'] == 'scheduler':
                     sched_t = get_scheduled_target(src_cfg.get('schedule_name', ''))
@@ -1900,6 +1970,7 @@ class BroadcastEngine:
                            s = CONFIG['sources'][candidate_idx]
                            is_conf = False
                            if s['type'] == 'stream' and s['url']: is_conf = True
+                           elif s['type'] == 'icecast_auth' and build_icecast_auth_url(s): is_conf = True
                            elif s['type'] in ['rtp_mpegts', 'multiplex'] and s['rtp_uri']: is_conf = True
                            elif s['type'] == 'rtp_sdp' and s['path'] and os.path.exists(s['path']): is_conf = True
                            elif s['type'] == 'file' and s['path']: is_conf = True
@@ -2082,10 +2153,12 @@ def index():
     login_error = False if login_lockout else session.pop('login_error', False)
     
     if not session.get('logged_in'): 
+        # Always hide all passwords (admin, operator, SMTP) from the rendered HTML source code
         safe_cfg = json.loads(json.dumps(CONFIG))
         safe_cfg['server']['password'] = ''
         safe_cfg['server']['op_pass'] = ''
         safe_cfg['smtp']['pass'] = ''
+        for s in safe_cfg['sources']: s['icecast_pass'] = ''
         return render_template('index.html', login_needed=True, cfg=safe_cfg, login_error=login_error, login_lockout=login_lockout)
         
     if request.method == 'POST':
@@ -2114,6 +2187,10 @@ def index():
             for i in range(3):
                 new_type = request.form.get(f'type{i}')
                 new_url = request.form.get(f'url{i}', '')
+                new_icecast_url = request.form.get(f'icecast_url{i}', '').strip()
+                new_icecast_mount = request.form.get(f'icecast_mount{i}', '').strip()
+                new_icecast_user = request.form.get(f'icecast_user{i}', '').strip()
+                new_icecast_pass = request.form.get(f'icecast_pass{i}', '')
                 new_uri = request.form.get(f'rtp_uri{i}', '')
                 new_path = request.form.get(f'path{i}', '')
                 new_backup_file = request.form.get(f'backup_file{i}', '')
@@ -2142,7 +2219,7 @@ def index():
                 src = CONFIG['sources'][i]
                 src['input_device'] = int(new_in_dev) if (new_in_dev and new_in_dev != 'None') else None
                 
-                if (src['type'] != new_type or src['url'] != new_url or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('schedule_name') != new_schedule_name or src.get('max_latency_ms') != new_max_latency or src.get('sid') != new_sid or src.get('pid') != new_pid or
+                if (src['type'] != new_type or src['url'] != new_url or src.get('icecast_url', '') != new_icecast_url or src.get('icecast_mount', '') != new_icecast_mount or src.get('icecast_user', '') != new_icecast_user or src.get('icecast_pass', '') != new_icecast_pass or src['rtp_uri'] != new_uri or src['path'] != new_path or src.get('backup_file') != new_backup_file or src.get('backup_mode') != new_backup_mode or src.get('backup_playlist_name') != new_playlist_name or src.get('schedule_name') != new_schedule_name or src.get('max_latency_ms') != new_max_latency or src.get('sid') != new_sid or src.get('pid') != new_pid or
                     src.get('sat_ip') != new_sat_ip or src.get('sat_port') != new_sat_port or src.get('sat_src') != new_sat_src or src.get('sat_freq') != new_sat_freq or src.get('sat_pol') != new_sat_pol or src.get('sat_msys') != new_sat_msys or src.get('sat_sr') != new_sat_sr or
                     src.get('meta_export_method') != request.form.get(f'meta_export_method{i}', 'file') or
                     src.get('meta_tcp_ip') != request.form.get(f'meta_tcp_ip{i}', '127.0.0.1') or
@@ -2153,6 +2230,10 @@ def index():
                 
                 src['type'] = new_type
                 src['url'] = new_url
+                src['icecast_url'] = new_icecast_url
+                src['icecast_mount'] = new_icecast_mount
+                src['icecast_user'] = new_icecast_user
+                src['icecast_pass'] = new_icecast_pass
                 src['rtp_uri'] = new_uri
                 src['path'] = new_path
                 src['sat_ip'] = new_sat_ip
@@ -2255,10 +2336,12 @@ def index():
         in_devs.sort(key=lambda x: x['name'])
     except: pass
     
+    # Always hide all passwords (admin, operator, SMTP) from the rendered HTML source code
     safe_cfg = json.loads(json.dumps(CONFIG))
     safe_cfg['server']['password'] = ''
     safe_cfg['server']['op_pass'] = ''
     safe_cfg['smtp']['pass'] = ''
+    for s in safe_cfg['sources']: s['icecast_pass'] = ''
 
     audio_files = get_audio_files_info()
     return render_template('index.html', login_needed=False, cfg=safe_cfg, devices=devs, in_devices=in_devs, audio_files=audio_files, serial_ports=uecp.list_serial_ports(), uecp_source_types=uecp.SOURCE_TYPES)
@@ -2657,6 +2740,16 @@ def get_credentials():
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     return resp
 
+@app.route('/api/source_credentials', methods=['GET'])
+def get_source_credentials():
+    if not session.get('logged_in'):
+        return jsonify({"error": "Unauthorized"}), 401
+    resp = jsonify({
+        'icecast_passes': [src.get('icecast_pass', '') for src in CONFIG['sources']]
+    })
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    return resp
+
 @app.route('/set_mode', methods=['POST'])
 def set_mode():
     if not session.get('logged_in'): return get_perm_err(), 403
@@ -2682,6 +2775,7 @@ def set_mode():
             s = CONFIG['sources'][i]
             is_conf = False
             if s['type'] == 'stream' and s['url']: is_conf = True
+            elif s['type'] == 'icecast_auth' and build_icecast_auth_url(s): is_conf = True
             elif s['type'] in ['rtp_mpegts', 'multiplex'] and s['rtp_uri']: is_conf = True
             elif s['type'] == 'rtp_sdp' and s['path'] and os.path.exists(s['path']): is_conf = True
             elif s['type'] == 'file' and s['path'] and os.path.exists(s['path']): is_conf = True
@@ -2859,6 +2953,13 @@ def socket_emit_loop():
             if src['type'] == 'stream':
                 if src['url']:
                     np_str = f"Now playing: {src['url']}"
+                    if engine.current_metadata_title:
+                        np_str += f" ({engine.current_metadata_title})"
+                else: np_str = "Now playing: ..."
+            elif src['type'] == 'icecast_auth':
+                ice_url = build_icecast_auth_url(src)
+                if ice_url:
+                    np_str = f"Now playing: {ice_url}"
                     if engine.current_metadata_title:
                         np_str += f" ({engine.current_metadata_title})"
                 else: np_str = "Now playing: ..."

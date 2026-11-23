@@ -778,7 +778,7 @@
                     <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                     Logout
                 </a>
-                <div style="border-top: 1px solid #eee; padding: 6px 15px; text-align: right; font-size: 0.75rem; color: #888; user-select: none;">Version 1.12 (15/11/2026)</div>
+                <div style="border-top: 1px solid #eee; padding: 6px 15px; text-align: right; font-size: 0.75rem; color: #888; user-select: none;">Version 1.13 (23/11/2026)</div>
             </div>
         </div>
         {% endif %}
@@ -977,6 +977,8 @@
                         <label>Type:</label>
                         <select name="type{{i}}" onchange="toggleType('{{i}}')" id="sel-type-{{i}}">
                             <option value="stream" {% if cfg.sources[i].type == 'stream' %}selected{% endif %}>IP Stream (HTTP / HTTPS)</option>
+                            <option value="icecast_auth" data-short="1" hidden {% if cfg.sources[i].type == 'icecast_auth' %}selected{% endif %}>Protected Icecast Stream</option>
+                            <option value="icecast_auth">Protected Icecast Stream (HTTP / HTTPS)</option>
                             <option value="rtp_mpegts" {% if cfg.sources[i].type == 'rtp_mpegts' %}selected{% endif %}>RTP Stream (Via MPEG-TS)</option>
                             <option value="rtp_sdp" {% if cfg.sources[i].type == 'rtp_sdp' %}selected{% endif %}>RTP Stream (Via SDP File)</option>
                             <option value="multiplex" {% if cfg.sources[i].type == 'multiplex' %}selected{% endif %}>Satellite Stream (SAT&gt;IP / MPEG-TS)</option>
@@ -988,6 +990,21 @@
                         </select>
                     </div>
                     <div class="form-row" id="row-url-{{i}}"><label>URL:</label><input type="text" name="url{{i}}" value="{{ cfg.sources[i].url }}"></div>
+                    <div id="row-icecast-auth-{{i}}" style="display:none; flex-direction:column; gap:10px; background:#f9f9f9; padding:10px; border-radius:4px; border:1px solid #eee; margin-bottom:10px;">
+                        <div class="form-row" style="margin-bottom:0;"><label>Server URL (with port):</label><input type="text" name="icecast_url{{i}}" value="{{ cfg.sources[i].icecast_url }}"></div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Mountpoint:</label><input type="text" name="icecast_mount{{i}}" value="{{ cfg.sources[i].icecast_mount }}" placeholder="/stream"></div>
+                        <div class="form-row" style="margin-bottom:0;"><label>Stream Username:</label><input type="text" name="icecast_user{{i}}" value="{{ cfg.sources[i].icecast_user }}"></div>
+                        <div class="form-row" style="margin-bottom:0;">
+                            <label>Stream Password:</label>
+                            <div style="position: relative; flex: 1; display: flex; min-width: 0;">
+                                <input type="password" name="icecast_pass{{i}}" id="icecast-pass-{{i}}" value="" style="padding-right: 30px;">
+                                <span onclick="togglePassword('icecast-pass-{{i}}', this)" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #666; display: flex; align-items: center;">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                </span>
+                            </div>
+                        </div>
+                        <div style="font-size:0.8rem; color:#666; font-style:italic;">Allows playback of an Icecast stream that requires authentication.</div>
+                    </div>
                     <div class="form-row" id="row-rtp-{{i}}" style="display:none;"><label>URI (RTSP, UDP, etc.):</label><input type="text" name="rtp_uri{{i}}" value="{{ cfg.sources[i].rtp_uri }}"></div>
                     
                     <div id="row-multiplex-{{i}}" style="display:none; flex-direction:column; gap:10px; background:#f9f9f9; padding:10px; border-radius:4px; border:1px solid #eee; margin-bottom:10px;">
@@ -1310,6 +1327,25 @@
         </div>
         <div class="footer-bar"><button type="submit" class="save-btn"{% if cfg.server.language == 'fr' %} style="width: 408px;"{% endif %}>Save changes and apply configuration</button></div>
     </form>
+    <script>
+        function loadSourceCredentials() {
+            fetch('/api/source_credentials', { cache: 'no-store', credentials: 'same-origin' })
+            .then(function(r) {
+                if (!r.ok) return null;
+                return r.json();
+            })
+            .then(function(data) {
+                if (!data || !data.icecast_passes) return;
+                for (var i = 0; i < data.icecast_passes.length; i++) {
+                    var el = document.getElementById('icecast-pass-' + i);
+                    if (el) el.value = data.icecast_passes[i] || '';
+                }
+            })
+            .catch(function() {});
+        }
+        loadSourceCredentials();
+        document.addEventListener('DOMContentLoaded', loadSourceCredentials);
+    </script>
     {% endif %}
 </div>
 </div> <!-- main-content closure -->
@@ -1408,9 +1444,39 @@
         });
     }
 
+    document.addEventListener('DOMContentLoaded', function() {
+        for (let i = 0; i < 3; i++) {
+            let sel = document.getElementById('sel-type-' + i);
+            if (!sel) continue;
+            sel.addEventListener('keydown', function(e) {
+                if (this.value === 'icecast_auth' && e.key === 'ArrowDown') {
+                    let idx = this.selectedIndex;
+                    if (idx + 2 < this.options.length) {
+                        e.preventDefault();
+                        this.selectedIndex = idx + 2;
+                        this.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                } else if (this.value === 'icecast_auth' && e.key === 'ArrowUp') {
+                    let idx = this.selectedIndex;
+                    if (idx - 1 >= 0) {
+                        e.preventDefault();
+                        this.selectedIndex = idx - 1;
+                        this.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            });
+        }
+    });
+
     function toggleType(idx) {
-        let val = document.getElementById('sel-type-' + idx).value;
+        let sel = document.getElementById('sel-type-' + idx);
+        let val = sel.value;
+        if (val === 'icecast_auth') {
+            let shortOpt = sel.querySelector('option[data-short="1"]');
+            if (shortOpt) shortOpt.selected = true;
+        }
         document.getElementById('row-url-' + idx).style.display = 'none';
+        document.getElementById('row-icecast-auth-' + idx).style.display = 'none';
         document.getElementById('row-rtp-' + idx).style.display = 'none';
         document.getElementById('row-multiplex-' + idx).style.display = 'none';
         document.getElementById('row-device-' + idx).style.display = 'none';
@@ -1427,6 +1493,9 @@
 
         if(val === 'stream') {
             document.getElementById('row-url-' + idx).style.display = 'flex';
+            document.getElementById('meta-wrapper-' + idx).style.display = 'block';
+        } else if (val === 'icecast_auth') {
+            document.getElementById('row-icecast-auth-' + idx).style.display = 'flex';
             document.getElementById('meta-wrapper-' + idx).style.display = 'block';
         } else if (val === 'rtp_mpegts') {
             document.getElementById('row-rtp-' + idx).style.display = 'flex';
@@ -3160,6 +3229,13 @@
         "Time": "Heure",
         "Source Type": "Type de source",
         "IP Stream (HTTP / HTTPS)": "Flux IP (HTTP / HTTPS)",
+        "Protected Icecast Stream": "Flux Icecast protégé",
+        "Protected Icecast Stream (HTTP / HTTPS)": "Flux Icecast protégé (HTTP / HTTPS)",
+        "Allows playback of an Icecast stream that requires authentication.": "Permet la lecture d'un flux Icecast nécessitant une authentification.",
+        "Server URL (with port):": "URL du serveur (avec port) :",
+        "Mountpoint:": "Point de montage :",
+        "Stream Username:": "Nom d'utilisateur :",
+        "Stream Password:": "Mot de passe :",
         "RTP Stream (Via MPEG-TS)": "Flux RTP (MPEG-TS)",
         "RTP Stream (Via SDP File)": "Flux RTP (Fichier SDP)",
         "Satellite Stream (SAT>IP)": "Flux Satellite (SAT>IP)",
