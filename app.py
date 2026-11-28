@@ -454,14 +454,29 @@ class SourceChannel:
     def mark_unreachable(self, reason):
         """Set UNREACHABLE and log why (once per distinct reason per minute, to avoid log spam)."""
         self.status_text = "UNREACHABLE"
-        if self.last_ffmpeg_error and self.last_ffmpeg_error not in reason:
-            reason = f"{reason} | ffmpeg: {self.last_ffmpeg_error}"
+        detail = self.last_ffmpeg_error or (self.ffmpeg_tail[-1] if self.ffmpeg_tail else "")
+        if detail and detail not in reason:
+            reason = f"{reason} | ffmpeg: {detail[:300]}"
         last_reason, last_t = self.last_unreachable_log
         if reason != last_reason or time.time() - last_t > 60:
             self.last_unreachable_log = (reason, time.time())
             try: name = CONFIG['sources'][self.index]['name']
             except Exception: name = f"Source {self.index + 1}"
             add_internal_log(f"{name} unreachable: {reason}", "ERROR")
+            self._dump_ffmpeg_tail(reason)
+
+    def _dump_ffmpeg_tail(self, reason):
+        """Write the ffmpeg command and its last output to ffmpeg-error-source<N>.txt for diagnosis."""
+        if not self.last_cmd: return
+        try:
+            mask = lambda a: re.sub(r'(//[^/:@\s]+:)[^@/\s]+@', r'\1****@', str(a))  # hide URL passwords
+            path = f"ffmpeg-error-source{self.index + 1}.txt"
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(f"{datetime.now():%d/%m/%Y %H:%M:%S}  {reason}\n\n")
+                f.write("COMMAND:\n" + " ".join(mask(a) for a in self.last_cmd) + "\n\n")
+                f.write("LAST FFMPEG OUTPUT:\n" + "\n".join(mask(l) for l in list(self.ffmpeg_tail)) + "\n")
+        except Exception:
+            pass
 
     def __init__(self, index):
         self.index = index
@@ -482,6 +497,8 @@ class SourceChannel:
         self.stream_title = ""     # Added for single-connection metadata extraction
         self.meta_delay_queue = [] # Delays titles to perfectly match actual audio output
         self.last_ffmpeg_error = ""  # last error-looking line from ffmpeg's stderr
+        self.ffmpeg_tail = collections.deque(maxlen=60)  # last stderr lines of the current ffmpeg
+        self.last_cmd = []
         self.last_unreachable_log = ("", 0.0)
 
         # UECP (RDS) passthrough
@@ -758,12 +775,16 @@ class SourceChannel:
             rw_timeout = '15000000' 
 
             def stderr_reader(proc, channel):
-                while proc and proc.poll() is None:
+                # Read until EOF, not just while ffmpeg runs: when it dies at startup, the reason is
+                # still sitting in the pipe and must be read after it has exited.
+                while proc:
                     try:
                         line = proc.stderr.readline()
                         if not line: break
                         line_str = line.decode('utf-8', errors='ignore')
                         line_lower = line_str.lower()
+                        if proc is channel.process and line_str.strip():
+                            channel.ffmpeg_tail.append(line_str.rstrip())
                         if proc is channel.process and any(w in line_lower for w in _FFMPEG_ERR_WORDS) \
                                 and 'error concealment' not in line_lower and 'err_detect' not in line_lower:
                             channel.last_ffmpeg_error = line_str.strip()[:300]
@@ -1091,11 +1112,14 @@ class SourceChannel:
                     self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
                 
                 self.last_ffmpeg_error = ""
-                threading.Thread(target=stderr_reader, args=(self.process, self), daemon=True).start()
+                self.ffmpeg_tail.clear()
+                self.last_cmd = list(cmd)
+                err_thread = threading.Thread(target=stderr_reader, args=(self.process, self), daemon=True)
+                err_thread.start()
                 
                 time.sleep(0.5)
                 if self.process.poll() is not None:
-                    time.sleep(0.2)  # let stderr_reader catch the reason
+                    err_thread.join(1.0)  # let stderr_reader read the reason
                     raise Exception(f"ffmpeg exited immediately (code {self.process.returncode})")
                 
                 self.last_data_time = time.time()
