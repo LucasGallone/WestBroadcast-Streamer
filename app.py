@@ -1306,11 +1306,15 @@ class BroadcastEngine:
                         query = sd.query_devices()
                         host_apis = sd.query_hostapis()
                         for i, d in enumerate(query):
+                            # Inputs and outputs often share a name (e.g. "Line 1/2"): only match outputs
+                            if d['max_output_channels'] < 1: continue
                             api_name = host_apis[d['hostapi']]['name']
                             dev_name = f"[{api_name}] {d['name']}"
                             if dev_name == device:
                                 target_id = i
                                 break
+                        if target_id is None:
+                            add_internal_log(f"Output device '{device}' not found, using system default output.", "WARNING")
                         device = target_id if target_id is not None else sd.default.device[1]
                 except:
                     device = sd.default.device[1]
@@ -1338,7 +1342,7 @@ class BroadcastEngine:
             if r not in rates: rates.append(r)
 
         chans = []
-        for c in (CHANNELS, max_ch, 1):
+        for c in (CHANNELS, max_ch, 1, 4, 6, 8):
             if 1 <= c <= max(max_ch, 1) and c not in chans: chans.append(c)
 
         return [(r, c) for r in rates for c in chans]
@@ -1353,6 +1357,16 @@ class BroadcastEngine:
             host_api = sd.query_hostapis(dev_info['hostapi'])['name'].upper()
         except Exception:
             pass
+
+        if dev_info and int(dev_info.get('max_output_channels') or 0) < 1:
+            add_internal_log(f"Device #{device} '{dev_info.get('name')}' has no output channels, using system default output.", "WARNING")
+            device = sd.default.device[1]
+            base['device'] = device
+            try:
+                dev_info = sd.query_devices(device)
+                host_api = sd.query_hostapis(dev_info['hostapi'])['name'].upper()
+            except Exception:
+                dev_info, host_api = {}, ''
 
         if 'WDM-KS' in host_api or 'WASAPI' in host_api:
             base['blocksize'] = 0
@@ -1398,7 +1412,8 @@ class BroadcastEngine:
             if rnd < rounds - 1:
                 time.sleep(1.0)
 
-        raise last_err if last_err else RuntimeError("No usable output format")
+        desc = f"#{device} [{host_api or '?'}] {dev_info.get('name', '?')} (reports {dev_info.get('max_output_channels', '?')} out ch, {dev_info.get('default_samplerate', '?')} Hz)"
+        raise RuntimeError(f"{last_err} -- no rate/channel combination accepted by {desc}")
 
     def _write_output(self, outdata, stereo):
         """Map the internal stereo signal onto however many channels the device was opened with."""
