@@ -447,7 +447,22 @@ def get_scheduled_target(schedule_name):
 # --- 4. AUDIO CLASSES ---
 UECP_CODEC_CACHE = {} # (ffmpeg input, map args) -> codec last seen on it, decides whether to add the UECP tap
 
+_FFMPEG_ERR_WORDS = ('error', 'failed', 'invalid', 'refused', 'not found', 'unable', 'timed out', 'no such',
+                     'forbidden', 'unauthorized', 'server returned', 'could not', 'cannot', 'denied')
+
 class SourceChannel:
+    def mark_unreachable(self, reason):
+        """Set UNREACHABLE and log why (once per distinct reason per minute, to avoid log spam)."""
+        self.status_text = "UNREACHABLE"
+        if self.last_ffmpeg_error and self.last_ffmpeg_error not in reason:
+            reason = f"{reason} | ffmpeg: {self.last_ffmpeg_error}"
+        last_reason, last_t = self.last_unreachable_log
+        if reason != last_reason or time.time() - last_t > 60:
+            self.last_unreachable_log = (reason, time.time())
+            try: name = CONFIG['sources'][self.index]['name']
+            except Exception: name = f"Source {self.index + 1}"
+            add_internal_log(f"{name} unreachable: {reason}", "ERROR")
+
     def __init__(self, index):
         self.index = index
         self.queue = uecp.FrameCountingQueue(maxsize=10000)
@@ -466,6 +481,8 @@ class SourceChannel:
         self.saved_positions = {}  # Tracks playback positions for local files
         self.stream_title = ""     # Added for single-connection metadata extraction
         self.meta_delay_queue = [] # Delays titles to perfectly match actual audio output
+        self.last_ffmpeg_error = ""  # last error-looking line from ffmpeg's stderr
+        self.last_unreachable_log = ("", 0.0)
 
         # UECP (RDS) passthrough
         self.detected_codec = None          # input codec of the played audio, from ffmpeg's "Stream mapping"
@@ -747,6 +764,9 @@ class SourceChannel:
                         if not line: break
                         line_str = line.decode('utf-8', errors='ignore')
                         line_lower = line_str.lower()
+                        if proc is channel.process and any(w in line_lower for w in _FFMPEG_ERR_WORDS) \
+                                and 'error concealment' not in line_lower and 'err_detect' not in line_lower:
+                            channel.last_ffmpeg_error = line_str.strip()[:300]
                         # "Stream #0:0 -> #0:0 (mp2 (native) -> pcm_s16le (native))": codec of the played audio
                         if ' -> #0:0 (' in line_str:
                             m_codec = re.search(r"Stream #\d+:\d+\S* -> #0:0 \((\w+)", line_str)
@@ -1070,11 +1090,13 @@ class SourceChannel:
                 else:
                     self.process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
                 
+                self.last_ffmpeg_error = ""
                 threading.Thread(target=stderr_reader, args=(self.process, self), daemon=True).start()
                 
                 time.sleep(0.5)
                 if self.process.poll() is not None:
-                    raise Exception("Process died immediately")
+                    time.sleep(0.2)  # let stderr_reader catch the reason
+                    raise Exception(f"ffmpeg exited immediately (code {self.process.returncode})")
                 
                 self.last_data_time = time.time()
 
@@ -1164,7 +1186,7 @@ class SourceChannel:
                             self.queue.put(float_data)
 
             except Exception as e:
-                self.status_text = "UNREACHABLE"
+                self.mark_unreachable(str(e))
             finally:
                 is_normal_eof = False
                 if self.process:
@@ -1198,6 +1220,9 @@ class SourceChannel:
                 time.sleep(0.1)
                 continue
                 
+            if self.status_text != "UNREACHABLE" or not self.last_unreachable_log[0]:
+                code = self.process.returncode if self.process else None
+                self.mark_unreachable(f"ffmpeg stopped (exit code {code})" if not got_audio else f"stream ended (exit code {code})")
             self.status_text = "UNREACHABLE"
             self.is_reconnecting = True
             
@@ -1327,7 +1352,7 @@ class BroadcastEngine:
             add_internal_log(f"Audio Output Error: {str(e)}", "ERROR")
             logging.error(f"Audio Output Error: {e}")
 
-    def _output_format_candidates(self, dev_info):
+    def _output_format_candidates(self, dev_info, host_api=''):
         """(samplerate, channels) pairs to try, best first. WASAPI shared mode and WDM-KS only
         accept the device's own format, so the device's native rate/channel count come first."""
         native_rate = int(round(dev_info.get('default_samplerate') or 48000))
@@ -1338,7 +1363,11 @@ class BroadcastEngine:
         try:
             if forced and int(forced) > 0: rates.append(int(forced))
         except (TypeError, ValueError): pass
-        for r in (native_rate, 48000, 44100, 96000, 88200, 192000, 176400):
+        # MME/DirectSound always report 44.1k and resample anything; keep the known-good 48k first there.
+        # WASAPI (shared) and WDM-KS only take the device's own rate, so that goes first.
+        exclusive_api = ('WASAPI' in host_api) or ('WDM-KS' in host_api)
+        order = (native_rate, 48000) if exclusive_api else (48000, native_rate)
+        for r in order + (44100, 96000, 88200, 192000, 176400):
             if r not in rates: rates.append(r)
 
         chans = []
@@ -1375,7 +1404,7 @@ class BroadcastEngine:
             base['blocksize'] = BLOCK_SIZE
             base['latency'] = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
 
-        attempts = [(r, c, None) for r, c in self._output_format_candidates(dev_info)]
+        attempts = [(r, c, None) for r, c in self._output_format_candidates(dev_info, host_api)]
         # Last resort on WASAPI: let Windows resample/remix from a plain 48 kHz stereo stream
         if 'WASAPI' in host_api:
             try: attempts.append((48000, CHANNELS, sd.WasapiSettings(auto_convert=True)))
@@ -1896,7 +1925,7 @@ class BroadcastEngine:
                      if ch.process:
                          try: ch.process.kill()
                          except: pass
-                     ch.status_text = "UNREACHABLE"
+                     ch.mark_unreachable(f"no audio data for {tech_timeout:.0f}s")
 
                 # 3. VU-Meters update
                 if i != self.current_source_idx:
