@@ -46,8 +46,10 @@ log.setLevel(logging.ERROR)
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s - %(message)s', datefmt='%d/%m/%Y - %H:%M')
 
 CONFIG_FILE = 'config.json'
+# Internal processing rate. Replaced at runtime by the rate the output device actually
+# accepts (see BroadcastEngine.start_audio_stream), so a 96/192 kHz card is not forced to 48 kHz.
 SAMPLE_RATE = 48000
-CHANNELS = 2
+CHANNELS = 2  # internal pipeline is always stereo; the output is mapped to the device's channel count
 BLOCK_SIZE = 1024 
 
 BACKUP_DIR = 'backup-audio-files'
@@ -843,6 +845,10 @@ class SourceChannel:
                     
                     def in_callback(indata, frames, time_info, status):
                         if not self.running or engine.channels[self.index] is not self: return
+                        if indata.shape[1] == 1:
+                            indata = np.repeat(indata, CHANNELS, axis=1)  # mono device -> stereo pipeline
+                        elif indata.shape[1] > CHANNELS:
+                            indata = indata[:, :CHANNELS]
                         if engine.current_source_idx == self.index:
                             # Target Buffer / Catch-up logic for live sources
                             if CONFIG['sources'][self.index]['type'] not in ['file', 'backup_dir', 'tone']:
@@ -867,11 +873,29 @@ class SourceChannel:
                             engine.vu_data['sources'][self.index]['r'] = db
 
                     try:
-                        with sd.InputStream(device=int(dev_id), samplerate=SAMPLE_RATE, channels=CHANNELS, callback=in_callback, blocksize=BLOCK_SIZE):
+                        in_info = sd.query_devices(int(dev_id))
+                        in_ch = max(1, min(CHANNELS, int(in_info.get('max_input_channels') or CHANNELS)))
+                        in_api = sd.query_hostapis(in_info['hostapi'])['name'].upper()
+                        in_attempts = [{}]
+                        if 'WASAPI' in in_api:
+                            try: in_attempts.append({'extra_settings': sd.WasapiSettings(auto_convert=True)})
+                            except Exception: pass
+                        in_stream, in_err = None, None
+                        for extra in in_attempts:
+                            try:
+                                in_stream = sd.InputStream(device=int(dev_id), samplerate=SAMPLE_RATE, channels=in_ch, dtype='float32',
+                                                           callback=in_callback, blocksize=BLOCK_SIZE, **extra)
+                                break
+                            except Exception as e:
+                                in_err = e
+                        if in_stream is None: raise in_err
+                        with in_stream:
                             while self.running: 
                                 self.last_data_time = time.time()
                                 time.sleep(0.1)
-                    except: self.status_text = "UNREACHABLE"
+                    except Exception as e:
+                        add_internal_log(f"Input device error ({src.get('name', '')}): {e}", "ERROR")
+                        self.status_text = "UNREACHABLE"
                     
                     self.is_reconnecting = True
                     time.sleep(5)
@@ -1110,6 +1134,9 @@ class SourceChannel:
                         start_pos += (frames_read / SAMPLE_RATE)
                         self.saved_positions[target_path] = start_pos
                     
+                    frame_bytes = 2 * CHANNELS
+                    if len(raw) % frame_bytes: raw = raw[:len(raw) - (len(raw) % frame_bytes)]  # drop a trailing partial frame
+                    if not raw: continue
                     int16_data = np.frombuffer(raw, dtype=np.int16).reshape(-1, CHANNELS)
                     float_data = int16_data.astype(np.float32) / 32768.0
                     
@@ -1222,6 +1249,10 @@ class BroadcastEngine:
         self.channels = [SourceChannel(i) for i in range(3)]
         self.analysis_active = False
         self.uecp_router = uecp.UecpRouter(add_internal_log) # kept across engine restarts
+        self.out_channels = CHANNELS
+
+        # Open the output first: it decides SAMPLE_RATE, which the sources resample to.
+        self.start_audio_stream()
 
         self.t_monitor = threading.Thread(target=self._monitor_loop, args=(self.run_id,), daemon=True)
         self.t_monitor.start()
@@ -1232,7 +1263,6 @@ class BroadcastEngine:
         self.t_uecp = threading.Thread(target=self._uecp_loop, args=(self.run_id,), daemon=True)
         self.t_uecp.start()
 
-        self.start_audio_stream()
         if '--is-restart' in sys.argv:
             add_internal_log("Audio engine restarted.", "SYSTEM")
         else:
@@ -1287,57 +1317,99 @@ class BroadcastEngine:
             else:
                 device = sd.default.device[1]
 
-            # Build Stream arguments dynamically to prevent parameter rejection
-            stream_kwargs = {
-                'device': device,
-                'samplerate': SAMPLE_RATE,
-                'channels': CHANNELS,
-                'dtype': 'float32',
-                'callback': self._audio_callback
-            }
-
-            is_wasapi = False
-            try:
-                dev_info = sd.query_devices(device)
-                host_api = sd.query_hostapis(dev_info['hostapi'])['name']
-                
-                if 'WDM-KS' in host_api.upper():
-                    stream_kwargs['blocksize'] = 0
-                    stream_kwargs['latency'] = 'low'
-                elif 'WASAPI' in host_api.upper():
-                    stream_kwargs['blocksize'] = 0
-                    stream_kwargs['latency'] = 'low' # Safe native hardware latency to avoid parameter rejection
-                    is_wasapi = True
-                else:
-                    stream_kwargs['blocksize'] = BLOCK_SIZE
-                    stream_kwargs['latency'] = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
-            except:
-                stream_kwargs['blocksize'] = BLOCK_SIZE
-                stream_kwargs['latency'] = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
-
-            # Safe initialization loop
-            max_retries = 3 if is_wasapi else 1
-            last_err = None
-
-            for attempt in range(max_retries):
-                try:
-                    self.stream = sd.OutputStream(**stream_kwargs)
-                    self.stream.start()
-                    last_err = None
-                    break
-                except Exception as e:
-                    last_err = e
-                    if is_wasapi and attempt < max_retries - 1:
-                        time.sleep(1.0)
-                    else:
-                        break
-
-            if last_err is not None:
-                raise last_err
+            self._open_output_stream(device)
 
         except Exception as e:
             add_internal_log(f"Audio Output Error: {str(e)}", "ERROR")
             logging.error(f"Audio Output Error: {e}")
+
+    def _output_format_candidates(self, dev_info):
+        """(samplerate, channels) pairs to try, best first. WASAPI shared mode and WDM-KS only
+        accept the device's own format, so the device's native rate/channel count come first."""
+        native_rate = int(round(dev_info.get('default_samplerate') or 48000))
+        max_ch = int(dev_info.get('max_output_channels') or CHANNELS)
+
+        rates = []
+        forced = CONFIG['audio'].get('sample_rate')
+        try:
+            if forced and int(forced) > 0: rates.append(int(forced))
+        except (TypeError, ValueError): pass
+        for r in (native_rate, 48000, 44100, 96000, 88200, 192000, 176400):
+            if r not in rates: rates.append(r)
+
+        chans = []
+        for c in (CHANNELS, max_ch, 1):
+            if 1 <= c <= max(max_ch, 1) and c not in chans: chans.append(c)
+
+        return [(r, c) for r in rates for c in chans]
+
+    def _open_output_stream(self, device):
+        global SAMPLE_RATE
+        base = {'device': device, 'dtype': 'float32', 'callback': self._audio_callback}
+
+        dev_info, host_api = {}, ''
+        try:
+            dev_info = sd.query_devices(device)
+            host_api = sd.query_hostapis(dev_info['hostapi'])['name'].upper()
+        except Exception:
+            pass
+
+        if 'WDM-KS' in host_api or 'WASAPI' in host_api:
+            base['blocksize'] = 0
+            base['latency'] = 'low'
+        else:
+            base['blocksize'] = BLOCK_SIZE
+            base['latency'] = float(CONFIG['audio'].get('output_latency_ms', 1000)) / 1000.0
+
+        attempts = [(r, c, None) for r, c in self._output_format_candidates(dev_info)]
+        # Last resort on WASAPI: let Windows resample/remix from a plain 48 kHz stereo stream
+        if 'WASAPI' in host_api:
+            try: attempts.append((48000, CHANNELS, sd.WasapiSettings(auto_convert=True)))
+            except Exception: pass
+
+        rounds = 3 if 'WASAPI' in host_api else 1  # WASAPI endpoints can be briefly busy after a close
+        last_err = None
+        for rnd in range(rounds):
+            for rate, ch, extra in attempts:
+                kwargs = dict(base, samplerate=rate, channels=ch)
+                if extra is not None: kwargs['extra_settings'] = extra
+                try:
+                    stream = sd.OutputStream(**kwargs)
+                except Exception as e:
+                    last_err = e
+                    continue
+                # Commit the format before the callback can run
+                SAMPLE_RATE = int(rate)
+                self.out_channels = int(ch)
+                self.tone_phase = 0
+                for attr in ('audio_buffer', 'vu_delay_queue'):
+                    if hasattr(self, attr): delattr(self, attr)
+                try:
+                    stream.start()
+                except Exception as e:
+                    last_err = e
+                    try: stream.close()
+                    except Exception: pass
+                    continue
+                self.stream = stream
+                note = " (Windows auto-convert)" if extra is not None else ""
+                add_internal_log(f"Audio output opened at {SAMPLE_RATE} Hz, {self.out_channels} ch{note}.", "SYSTEM")
+                return
+            if rnd < rounds - 1:
+                time.sleep(1.0)
+
+        raise last_err if last_err else RuntimeError("No usable output format")
+
+    def _write_output(self, outdata, stereo):
+        """Map the internal stereo signal onto however many channels the device was opened with."""
+        n = outdata.shape[1]
+        if n == stereo.shape[1]:
+            outdata[:] = stereo
+        elif n == 1:
+            outdata[:, 0] = stereo.mean(axis=1)
+        else:
+            outdata[:, :2] = stereo
+            outdata[:, 2:] = 0
 
     def restart_engine(self, hardware_changed=True):
         # ID change to invalidate and force the termination of old threads
@@ -1375,6 +1447,10 @@ class BroadcastEngine:
             self.current_source_idx = 0 
             
         self.current_metadata_title = "" # Reset title to prevent visual ghosting on restart
+
+        # Open the output before the sources start, so they resample to the negotiated rate
+        if hardware_changed:
+            self.start_audio_stream()
         
         # Restarting new threads
         self.t_monitor = threading.Thread(target=self._monitor_loop, args=(self.run_id,), daemon=True)
@@ -1386,8 +1462,6 @@ class BroadcastEngine:
         self.t_uecp = threading.Thread(target=self._uecp_loop, args=(self.run_id,), daemon=True)
         self.t_uecp.start()
 
-        if hardware_changed:
-            self.start_audio_stream()
         add_internal_log("Audio engine restarted.", "SYSTEM")
 
     def _meta_loop(self, current_run_id):
@@ -2066,8 +2140,8 @@ class BroadcastEngine:
             else: sig = np.sign(np.sin(2 * np.pi * freq * t))
             
             sig = sig * (10 ** (gain / 20.0))
-            sig = sig.reshape(-1, 1)
-            outdata[:] = np.hstack([sig] * CHANNELS)
+            sig = sig.reshape(-1, 1).astype(np.float32)
+            self._write_output(outdata, np.hstack([sig] * CHANNELS))
             return
 
         ch = self.channels[self.current_source_idx]
@@ -2118,7 +2192,7 @@ class BroadcastEngine:
             if self.analysis_active:
                 socketio.emit('audio_analysis_data', {'samples': output_sig[:, 0].tolist()})
                 
-            outdata[:] = output_sig
+            self._write_output(outdata, output_sig)
 
         # Delay VU meters update by the exact output buffer latency to perfectly sync UI with physical speakers
         if not hasattr(self, 'vu_delay_queue'):
